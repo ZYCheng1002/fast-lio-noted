@@ -1556,8 +1556,8 @@ class esekf {
     dyn_share.valid = true;
     dyn_share.converge = true;
     int t = 0;
-    state x_propagated = x_;
-    cov P_propagated = P_;
+    state x_propagated = x_;  /// 最新的状态量
+    cov P_propagated = P_;    /// 最新的协方差
     int dof_Measurement;
 
     Matrix<scalar_type, n, 1> K_h;
@@ -1566,7 +1566,7 @@ class esekf {
     vectorized_state dx_new = vectorized_state::Zero();
     for (int i = -1; i < maximum_iter; i++) {
       dyn_share.valid = true;
-      h_dyn_share(x_, dyn_share);
+      h_dyn_share(x_, dyn_share);  /// 计算lidar观测的雅克比
 
       if (!dyn_share.valid) {
         continue;
@@ -1576,18 +1576,19 @@ class esekf {
 #ifdef USE_sparse
       spMt h_x_ = dyn_share.h_x.sparseView();
 #else
-      Eigen::Matrix<scalar_type, Eigen::Dynamic, 12> h_x_ = dyn_share.h_x;
+      Eigen::Matrix<scalar_type, Eigen::Dynamic, 12> h_x_ = dyn_share.h_x;  /// 获取观测的雅克比,行数和有效点个数相同
 #endif
       double solve_start = omp_get_wtime();
       dof_Measurement = h_x_.rows();
       vectorized_state dx;
-      x_.boxminus(dx, x_propagated);
-      dx_new = dx;
+      x_.boxminus(dx, x_propagated);  /// 获取误差dx,首次为0
+      dx_new = dx;                    /// 用于迭代的误差状态
 
       P_ = P_propagated;
 
       Matrix<scalar_type, 3, 3> res_temp_SO3;
       MTK::vect<3, scalar_type> seg_SO3;
+      /// 现在的代码中,SO3有Pose的Rot和外参的Rot
       for (std::vector<std::pair<int, int>>::iterator it = x_.SO3_state.begin(); it != x_.SO3_state.end(); it++) {
         int idx = (*it).first;
         int dim = (*it).second;
@@ -1595,8 +1596,9 @@ class esekf {
           seg_SO3(i) = dx(idx + i);
         }
 
-        res_temp_SO3 = MTK::A_matrix(seg_SO3).transpose();
+        res_temp_SO3 = MTK::A_matrix(seg_SO3).transpose();  /// 旋转矩阵
         dx_new.template block<3, 1>(idx, 0) = res_temp_SO3 * dx_new.template block<3, 1>(idx, 0);
+        /// 下面两个for实际上是计算JPJ^T,即更新协方差
         for (int i = 0; i < n; i++) {
           P_.template block<3, 1>(idx, i) = res_temp_SO3 * (P_.template block<3, 1>(idx, i));
         }
