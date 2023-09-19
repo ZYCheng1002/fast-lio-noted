@@ -7,4 +7,4 @@ Log/*.pdf
 .vscode/settings.json
 PCD/*.pcd
 .idea
-CMakeLists.txt
+cmake-build-debug

@@ -1579,7 +1579,7 @@ class esekf {
       Eigen::Matrix<scalar_type, Eigen::Dynamic, 12> h_x_ = dyn_share.h_x;  /// 获取观测的雅克比,行数和有效点个数相同
 #endif
       double solve_start = omp_get_wtime();
-      dof_Measurement = h_x_.rows();
+      dof_Measurement = h_x_.rows();  /// 观测的个数
       vectorized_state dx;
       x_.boxminus(dx, x_propagated);  /// 获取误差dx,首次为0
       dx_new = dx;                    /// 用于迭代的误差状态
@@ -1598,7 +1598,7 @@ class esekf {
 
         res_temp_SO3 = MTK::A_matrix(seg_SO3).transpose();  /// 旋转矩阵
         dx_new.template block<3, 1>(idx, 0) = res_temp_SO3 * dx_new.template block<3, 1>(idx, 0);
-        /// 下面两个for实际上是计算JPJ^T,即更新协方差
+        /// 下面两个for实际上是计算J*P*J^T,即更新协方差
         for (int i = 0; i < n; i++) {
           P_.template block<3, 1>(idx, i) = res_temp_SO3 * (P_.template block<3, 1>(idx, i));
         }
