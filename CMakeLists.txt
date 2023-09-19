@@ -51,7 +51,6 @@ find_package(catkin REQUIRED COMPONENTS
   std_msgs
   pcl_ros
   tf
-  livox_ros_driver
   message_generation
   eigen_conversions
 )
@@ -71,6 +70,8 @@ include_directories(
 add_message_files(
   FILES
   Pose6D.msg
+  CustomMsg.msg
+  CustomPoint.msg
 )
 
 generate_messages(
