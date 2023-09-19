@@ -75,6 +75,7 @@ class ImuProcess {
   double first_lidar_time;
 
  private:
+  ///@brief 初始化零偏等
   void IMU_init(const MeasureGroup& meas, esekfom::esekf<state_ikfom, 12, input_ikfom>& kf_state, int& N);
 
   void UndistortPcl(const MeasureGroup& meas,
@@ -84,19 +85,19 @@ class ImuProcess {
   PointCloudXYZI::Ptr cur_pcl_un_;
   sensor_msgs::ImuConstPtr last_imu_;
   deque<sensor_msgs::ImuConstPtr> v_imu_;
-  vector<Pose6D> IMUpose;
+  vector<Pose6D> IMUpose;  /// 存储带有时间戳的imu pose
   vector<M3D> v_rot_pcl_;
-  M3D Lidar_R_wrt_IMU;
-  V3D Lidar_T_wrt_IMU;
-  V3D mean_acc;
-  V3D mean_gyr;
+  M3D Lidar_R_wrt_IMU;  /// 外参Rot
+  V3D Lidar_T_wrt_IMU;  /// 外参Trans
+  V3D mean_acc;         /// 加速度计均值
+  V3D mean_gyr;         /// 陀螺仪均值
   V3D angvel_last;
   V3D acc_s_last;
   double start_timestamp_;
-  double last_lidar_end_time_;
-  int init_iter_num = 1;
-  bool b_first_frame_ = true;
-  bool imu_need_init_ = true;
+  double last_lidar_end_time_;  /// 上帧lidar的结束时间
+  int init_iter_num = 1;        /// imu初始化中的imu帧数
+  bool b_first_frame_ = true;   /// imu初始化的首帧标志位
+  bool imu_need_init_ = true;   /// imu初始化标志位
 };
 
 ImuProcess::ImuProcess() : b_first_frame_(true), imu_need_init_(true), start_timestamp_(-1) {
@@ -154,9 +155,8 @@ void ImuProcess::set_gyr_bias_cov(const V3D& b_g) { cov_bias_gyr = b_g; }
 void ImuProcess::set_acc_bias_cov(const V3D& b_a) { cov_bias_acc = b_a; }
 
 void ImuProcess::IMU_init(const MeasureGroup& meas, esekfom::esekf<state_ikfom, 12, input_ikfom>& kf_state, int& N) {
-  /** 1. initializing the gravity, gyro bias, acc and gyro covariance
-   ** 2. normalize the acceleration measurenments to unit gravity **/
-
+  /// 1. 初始化重力、陀螺仪偏差、加速度计和陀螺仪协方差
+  /// 2. 将加速度测量值归一化为单位重力
   V3D cur_acc, cur_gyr;
 
   if (b_first_frame_) {
@@ -175,26 +175,24 @@ void ImuProcess::IMU_init(const MeasureGroup& meas, esekfom::esekf<state_ikfom, 
     const auto& gyr_acc = imu->angular_velocity;
     cur_acc << imu_acc.x, imu_acc.y, imu_acc.z;
     cur_gyr << gyr_acc.x, gyr_acc.y, gyr_acc.z;
-
+    /// 加速度计和陀螺仪的均值
     mean_acc += (cur_acc - mean_acc) / N;
     mean_gyr += (cur_gyr - mean_gyr) / N;
-
+    /// 加速度计和陀螺仪的协方差
     cov_acc = cov_acc * (N - 1.0) / N + (cur_acc - mean_acc).cwiseProduct(cur_acc - mean_acc) * (N - 1.0) / (N * N);
     cov_gyr = cov_gyr * (N - 1.0) / N + (cur_gyr - mean_gyr).cwiseProduct(cur_gyr - mean_gyr) * (N - 1.0) / (N * N);
-
-    // cout<<"acc norm: "<<cur_acc.norm()<<" "<<mean_acc.norm()<<endl;
-
     N++;
   }
   state_ikfom init_state = kf_state.get_x();
-  init_state.grav = S2(-mean_acc / mean_acc.norm() * G_m_s2);
+  init_state.grav = S2(-mean_acc / mean_acc.norm() * G_m_s2);  /// imu的单位向量(方向)
 
   // state_inout.rot = Eye3d; // Exp(mean_acc.cross(V3D(0, 0, -1 / scale_gravity)));
-  init_state.bg = mean_gyr;
-  init_state.offset_T_L_I = Lidar_T_wrt_IMU;
-  init_state.offset_R_L_I = Lidar_R_wrt_IMU;
-  kf_state.change_x(init_state);
+  init_state.bg = mean_gyr;                   /// 陀螺仪的零偏
+  init_state.offset_T_L_I = Lidar_T_wrt_IMU;  /// 外参Trans
+  init_state.offset_R_L_I = Lidar_R_wrt_IMU;  /// 外参Rot
+  kf_state.change_x(init_state);              /// 更新状态
 
+  /// todo
   esekfom::esekf<state_ikfom, 12, input_ikfom>::cov init_P = kf_state.get_P();
   init_P.setIdentity();
   init_P(6, 6) = init_P(7, 7) = init_P(8, 8) = 0.00001;
@@ -217,11 +215,9 @@ void ImuProcess::UndistortPcl(const MeasureGroup& meas,
   const double& pcl_beg_time = meas.lidar_beg_time;
   const double& pcl_end_time = meas.lidar_end_time;
 
-  /*** sort point clouds by offset time ***/
+  /// 根据点时间对点进行排序
   pcl_out = *(meas.lidar);
   sort(pcl_out.points.begin(), pcl_out.points.end(), time_list);
-  // cout<<"[ IMU Process ]: Process lidar from "<<pcl_beg_time<<" to "<<pcl_end_time<<", " \
-  //          <<meas.imu.size()<<" imu msgs from "<<imu_beg_time<<" to "<<imu_end_time<<endl;
 
   /*** Initialize IMU pose ***/
   state_ikfom imu_state = kf_state.get_x();
@@ -242,15 +238,13 @@ void ImuProcess::UndistortPcl(const MeasureGroup& meas,
 
     if (tail->header.stamp.toSec() < last_lidar_end_time_) continue;
 
+    /// 中值滤波
     angvel_avr << 0.5 * (head->angular_velocity.x + tail->angular_velocity.x),
         0.5 * (head->angular_velocity.y + tail->angular_velocity.y),
         0.5 * (head->angular_velocity.z + tail->angular_velocity.z);
     acc_avr << 0.5 * (head->linear_acceleration.x + tail->linear_acceleration.x),
         0.5 * (head->linear_acceleration.y + tail->linear_acceleration.y),
         0.5 * (head->linear_acceleration.z + tail->linear_acceleration.z);
-
-    // fout_imu << setw(10) << head->header.stamp.toSec() - first_lidar_time << " " << angvel_avr.transpose() << " " <<
-    // acc_avr.transpose() << endl;
 
     acc_avr = acc_avr * G_m_s2 / mean_acc.norm();  // - state_inout.ba;
 
@@ -267,10 +261,13 @@ void ImuProcess::UndistortPcl(const MeasureGroup& meas,
     Q.block<3, 3>(3, 3).diagonal() = cov_acc;
     Q.block<3, 3>(6, 6).diagonal() = cov_bias_gyr;
     Q.block<3, 3>(9, 9).diagonal() = cov_bias_acc;
+    /// 预测
     kf_state.predict(dt, Q, in);
 
     /* save the poses at each IMU measurements */
+    /// 获取状态量
     imu_state = kf_state.get_x();
+    /// 使用最新的零偏进行更新
     angvel_last = angvel_avr - imu_state.bg;
     acc_s_last = imu_state.rot * (acc_avr - imu_state.ba);
     for (int i = 0; i < 3; i++) {
@@ -290,7 +287,7 @@ void ImuProcess::UndistortPcl(const MeasureGroup& meas,
   last_imu_ = meas.imu.back();
   last_lidar_end_time_ = pcl_end_time;
 
-  /*** undistort each lidar point (backward propagation) ***/
+  /// 反向传播对点云进行运动补偿
   if (pcl_out.points.begin() == pcl_out.points.end()) return;
   auto it_pcl = pcl_out.points.end() - 1;
   for (auto it_kp = IMUpose.end() - 1; it_kp != IMUpose.begin(); it_kp--) {
@@ -340,6 +337,7 @@ void ImuProcess::Process(const MeasureGroup& meas,
   };
   ROS_ASSERT(meas.lidar != nullptr);
 
+  /// 首次IMU初始化,初始化完成下帧进行lidar相关操作
   if (imu_need_init_) {
     /// The very first lidar frame
     IMU_init(meas, kf_state, init_iter_num);
@@ -349,6 +347,7 @@ void ImuProcess::Process(const MeasureGroup& meas,
     last_imu_ = meas.imu.back();
 
     state_ikfom imu_state = kf_state.get_x();
+    /// imu大于10帧完成初始化
     if (init_iter_num > MAX_INI_COUNT) {
       cov_acc *= pow(G_m_s2 / mean_acc.norm(), 2);
       imu_need_init_ = false;

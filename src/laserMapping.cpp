@@ -388,9 +388,11 @@ bool sync_packages(MeasureGroup& meas) {
   }
 
   /*** push imu data, and pop from imu buffer ***/
-  double imu_time = imu_buffer.front()->header.stamp.toSec();
+  double imu_time = imu_buffer.front()->header.stamp.toSec();  /// imu列队中首帧时间
   meas.imu.clear();
   while ((!imu_buffer.empty()) && (imu_time < lidar_end_time)) {
+    // imu |||||||||||
+    // lid           |
     imu_time = imu_buffer.front()->header.stamp.toSec();
     if (imu_time > lidar_end_time) break;
     meas.imu.push_back(imu_buffer.front());
@@ -803,7 +805,9 @@ int main(int argc, char** argv) {
   while (status) {
     if (flg_exit) break;
     ros::spinOnce();
+    /// measures为一帧lidar和多帧imu
     if (sync_packages(Measures)) {
+      /// 首帧初始化
       if (flg_first_scan) {
         first_lidar_time = Measures.lidar_beg_time;
         p_imu->first_lidar_time = first_lidar_time;

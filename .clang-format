@@ -1,5 +1,4 @@
 BasedOnStyle: Google
-Standard: Cpp11
 BinPackArguments: false
 BinPackParameters: false
 PointerAlignment: Left
