@@ -612,7 +612,17 @@ void h_share_model(state_ikfom& s, esekfom::dyn_share_datastruct<double>& ekfom_
   /** closest surface search and residual computation **/
 #ifdef MP_EN
   omp_set_num_threads(MP_PROC_NUM);
-#pragma omp parallel for
+  ///@note 多线程中的变量全部声明为shared,因为已经开辟过内存,不会引起竞态条件
+#pragma omp parallel for default(none) shared(feats_down_size,     \
+                                              s,                   \
+                                              feats_down_body,     \
+                                              feats_down_world,    \
+                                              ekfom_data,          \
+                                              ikdtree,             \
+                                              point_selected_surf, \
+                                              Nearest_Points,      \
+                                              normvec,             \
+                                              res_last)
 #endif
   for (int i = 0; i < feats_down_size; i++) {
     PointType& point_body = feats_down_body->points[i];
