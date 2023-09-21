@@ -109,8 +109,8 @@ deque<PointCloudXYZI::Ptr> lidar_buffer;
 deque<sensor_msgs::Imu::ConstPtr> imu_buffer;
 
 PointCloudXYZI::Ptr featsFromMap(new PointCloudXYZI());
-PointCloudXYZI::Ptr feats_undistort(new PointCloudXYZI());
-PointCloudXYZI::Ptr feats_down_body(new PointCloudXYZI());   /// lidar坐标系下的点云
+PointCloudXYZI::Ptr feats_undistort(new PointCloudXYZI());   /// 去除畸变后的单帧点云
+PointCloudXYZI::Ptr feats_down_body(new PointCloudXYZI());   /// lidar坐标系下的点云(去除畸变后的单帧)
 PointCloudXYZI::Ptr feats_down_world(new PointCloudXYZI());  /// 世界坐标系下的点云
 PointCloudXYZI::Ptr normvec(new PointCloudXYZI(100000, 1));
 PointCloudXYZI::Ptr laserCloudOri(new PointCloudXYZI(100000, 1));
@@ -137,7 +137,7 @@ vect3 pos_lid;
 
 nav_msgs::Path path;
 nav_msgs::Odometry odomAftMapped;
-geometry_msgs::Quaternion geoQuat;
+geometry_msgs::Quaternion geoQuat;  /// 世界坐标系下imu的姿态
 geometry_msgs::PoseStamped msg_body_pose;
 
 shared_ptr<Preprocess> p_pre(new Preprocess());
@@ -174,6 +174,7 @@ void pointBodyToWorld_ikfom(PointType const* const pi, PointType* const po, stat
   po->intensity = pi->intensity;
 }
 
+///@brief 将点转为世界坐标系
 void pointBodyToWorld(PointType const* const pi, PointType* const po) {
   V3D p_body(pi->x, pi->y, pi->z);
   V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
@@ -194,6 +195,7 @@ void pointBodyToWorld(const Matrix<T, 3, 1>& pi, Matrix<T, 3, 1>& po) {
   po[2] = p_global(2);
 }
 
+///@brief 点转到世界坐标系下的imu坐标系
 void RGBpointBodyToWorld(PointType const* const pi, PointType* const po) {
   V3D p_body(pi->x, pi->y, pi->z);
   V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
@@ -204,6 +206,7 @@ void RGBpointBodyToWorld(PointType const* const pi, PointType* const po) {
   po->intensity = pi->intensity;
 }
 
+///@brief 点转到imu坐标系下
 void RGBpointBodyLidarToIMU(PointType const* const pi, PointType* const po) {
   V3D p_body_lidar(pi->x, pi->y, pi->z);
   V3D p_body_imu(state_point.offset_R_L_I * p_body_lidar + state_point.offset_T_L_I);
@@ -412,6 +415,7 @@ bool sync_packages(MeasureGroup& meas) {
 
 int process_increments = 0;
 
+///@brief ikdtree增量地图
 void map_incremental() {
   PointVector PointToAdd;
   PointVector PointNoNeedDownsample;
@@ -460,8 +464,9 @@ void map_incremental() {
 }
 
 PointCloudXYZI::Ptr pcl_wait_pub(new PointCloudXYZI(500000, 1));
-PointCloudXYZI::Ptr pcl_wait_save(new PointCloudXYZI());
+PointCloudXYZI::Ptr pcl_wait_save(new PointCloudXYZI());  /// 全局点云(世界坐标系下的imu坐标系)
 
+///@brief 发布世界坐标系下的单帧点云
 void publish_frame_world(const ros::Publisher& pubLaserCloudFull) {
   if (scan_pub_en) {
     PointCloudXYZI::Ptr laserCloudFullRes(dense_pub_en ? feats_undistort : feats_down_body);
@@ -542,6 +547,7 @@ void publish_map(const ros::Publisher& pubLaserCloudMap) {
   pubLaserCloudMap.publish(laserCloudMap);
 }
 
+///@brief 赋值世界坐标系下的imu位姿
 template <typename T>
 void set_posestamp(T& out) {
   out.pose.position.x = state_point.pos(0);
@@ -588,7 +594,7 @@ void publish_path(const ros::Publisher pubPath) {
   msg_body_pose.header.stamp = ros::Time().fromSec(lidar_end_time);
   msg_body_pose.header.frame_id = "camera_init";
 
-  /*** if path is too large, the rvis will crash ***/
+  /*** if path is too large, the rviz will crash ***/
   static int jjj = 0;
   jjj++;
   if (jjj % 10 == 0) {

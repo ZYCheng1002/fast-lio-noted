@@ -293,13 +293,13 @@ class esekf {
     x_.build_vect_state();
   }
 
-  // iterated error state EKF propogation
+  ///@brief iESKF预测(运动方程)
   void predict(double& dt, processnoisecovariance& Q, const input& i_in) {
-    flatted_state f_ = f(x_, i_in);
-    cov_ f_x_ = f_x(x_, i_in);
+    flatted_state f_ = f(x_, i_in);  /// 计算去除零偏后的输入
+    cov_ f_x_ = f_x(x_, i_in);       /// 计算Fx
     cov f_x_final;
 
-    Matrix<scalar_type, m, process_noise_dof> f_w_ = f_w(x_, i_in);
+    Matrix<scalar_type, m, process_noise_dof> f_w_ = f_w(x_, i_in);  /// 计算Fw
     Matrix<scalar_type, n, process_noise_dof> f_w_final;
     state x_before = x_;
     x_.oplus(f_, dt);
