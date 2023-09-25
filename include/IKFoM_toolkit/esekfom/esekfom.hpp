@@ -105,6 +105,7 @@ template <typename state,
           int measurement_noise_dof = 0>
 class esekf {
   typedef esekf self;
+  /// state::DOF 状态的维度, state::DIM 输入的维度
   enum { n = state::DOF, m = state::DIM, l = measurement::DOF };
 
  public:
@@ -305,32 +306,41 @@ class esekf {
     x_.oplus(f_, dt);
 
     F_x1 = cov::Identity();
+    /// state中声明了vect_state类型为std::vector<std::pair<std::pair<int, int>, int> > vect_state;
     for (std::vector<std::pair<std::pair<int, int>, int>>::iterator it = x_.vect_state.begin();
          it != x_.vect_state.end();
          it++) {
-      int idx = (*it).first.first;
-      int dim = (*it).first.second;
-      int dof = (*it).second;
+      /// it 指的是state中声明为vect3的量
+      int idx = (*it).first.first;   /// 某个状态在state中的idx
+      int dim = (*it).first.second;  /// 某个状态在state中的维数
+      int dof = (*it).second;        /// 某个状态的维度
+      /// n:状态量的维度
       for (int i = 0; i < n; i++) {
         for (int j = 0; j < dof; j++) {
+          /// 赋值Fx
           f_x_final(idx + j, i) = f_x_(dim + j, i);
         }
       }
+      /// process_noise_dof:噪声的维度
       for (int i = 0; i < process_noise_dof; i++) {
         for (int j = 0; j < dof; j++) {
+          /// 赋值Fw
           f_w_final(idx + j, i) = f_w_(dim + j, i);
         }
       }
     }
     Matrix<scalar_type, 3, 3> res_temp_SO3;
     MTK::vect<3, scalar_type> seg_SO3;
+    /// 针对状态中的SO3
     for (std::vector<std::pair<int, int>>::iterator it = x_.SO3_state.begin(); it != x_.SO3_state.end(); it++) {
-      int idx = (*it).first;
-      int dim = (*it).second;
+      int idx = (*it).first;   /// 某个状态在state中的idx
+      int dim = (*it).second;  /// 某个状态在state中的维数
       for (int i = 0; i < 3; i++) {
-        seg_SO3(i) = -1 * f_(dim + i) * dt;
+        seg_SO3(i) = -1 * f_(dim + i) * dt;  /// -[w-bg]*δt
       }
       MTK::SO3<scalar_type> res;
+      std::cout << "res.matrix: " << std::endl << res.matrix();
+      /// Exp(SO3), 指数映射
       res.w() = MTK::exp<scalar_type, 3>(res.vec(), seg_SO3, scalar_type(1 / 2));
 #ifdef USE_sparse
       res_temp_SO3 = res.toRotationMatrix();
@@ -340,17 +350,21 @@ class esekf {
         }
       }
 #else
+      /// 更新Fx
       F_x1.template block<3, 3>(idx, idx) = res.toRotationMatrix();
 #endif
       res_temp_SO3 = MTK::A_matrix(seg_SO3);
       for (int i = 0; i < n; i++) {
+        /// -A([w-bg]*δt),根据f_x应该只有Ri有,其余为0, block<3,3>(3,15)
         f_x_final.template block<3, 1>(idx, i) = res_temp_SO3 * (f_x_.template block<3, 1>(dim, i));
       }
       for (int i = 0; i < process_noise_dof; i++) {
+        /// fixme: -A([w-bg]*δt),根据f_x应该只有Ri有,其余为0, block<3,3>(3,0)
         f_w_final.template block<3, 1>(idx, i) = res_temp_SO3 * (f_w_.template block<3, 1>(dim, i));
       }
     }
 
+    /// 针对重力进行,总体同上
     Matrix<scalar_type, 2, 3> res_temp_S2;
     Matrix<scalar_type, 2, 2> res_temp_S2_;
     MTK::vect<3, scalar_type> seg_S2;

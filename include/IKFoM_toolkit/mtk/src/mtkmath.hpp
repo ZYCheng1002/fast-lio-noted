@@ -229,7 +229,7 @@ Eigen::Matrix<scalar, 2, 3> S2_w_expw_(Eigen::Matrix<scalar, 2, 1> v, scalar len
   }
 }
 
-///@brief 李代数表示的旋转变换为旋转矩阵
+///@brief 计算某个旋转向量的雅克比矩阵
 template <typename Base>
 Eigen::Matrix<typename Base::scalar, 3, 3> A_matrix(const Base& v) {
   Eigen::Matrix<typename Base::scalar, 3, 3> res;
