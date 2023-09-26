@@ -303,7 +303,7 @@ class esekf {
     Matrix<scalar_type, m, process_noise_dof> f_w_ = f_w(x_, i_in);  /// 计算Fw
     Matrix<scalar_type, n, process_noise_dof> f_w_final;
     state x_before = x_;
-    x_.oplus(f_, dt);
+    x_.oplus(f_, dt);  /// 根据输入更新状态量
 
     F_x1 = cov::Identity();
     /// state中声明了vect_state类型为std::vector<std::pair<std::pair<int, int>, int> > vect_state;
@@ -359,12 +359,12 @@ class esekf {
         f_x_final.template block<3, 1>(idx, i) = res_temp_SO3 * (f_x_.template block<3, 1>(dim, i));
       }
       for (int i = 0; i < process_noise_dof; i++) {
-        /// fixme: -A([w-bg]*δt),根据f_x应该只有Ri有,其余为0, block<3,3>(3,0)
+        /// -A([w-bg]*δt),根据f_w应该只有Ri有,其余为0, block<3,3>(3,0),注:R在状态为第二维,所以是(3,0)
         f_w_final.template block<3, 1>(idx, i) = res_temp_SO3 * (f_w_.template block<3, 1>(dim, i));
       }
     }
 
-    /// 针对重力进行,总体同上
+    /// 针对重力进行,总体同上(todo:x_before和x之间的计算)
     Matrix<scalar_type, 2, 3> res_temp_S2;
     Matrix<scalar_type, 2, 2> res_temp_S2_;
     MTK::vect<3, scalar_type> seg_S2;
@@ -411,6 +411,7 @@ class esekf {
     spMt xp = f_x_1 + f_x2 * dt;
     P_ = xp * P_ * xp.transpose() + (f_w1 * dt) * Q * (f_w1 * dt).transpose();
 #else
+    /// 前向传播,更新Fx和P
     F_x1 += f_x_final * dt;
     P_ = (F_x1)*P_ * (F_x1).transpose() + (dt * f_w_final) * Q * (dt * f_w_final).transpose();
 #endif
@@ -1610,9 +1611,10 @@ class esekf {
           seg_SO3(i) = dx(idx + i);
         }
 
-        res_temp_SO3 = MTK::A_matrix(seg_SO3).transpose();  /// 旋转矩阵
+        res_temp_SO3 = MTK::A_matrix(seg_SO3).transpose();  /// 获取雅克比
+        /// 更新误差量
         dx_new.template block<3, 1>(idx, 0) = res_temp_SO3 * dx_new.template block<3, 1>(idx, 0);
-        /// 下面两个for实际上是计算J*P*J^T,即更新协方差
+        /// 下面两个for实际上是计算J*P*J^T,即更新协方差(迭代一次后,协方差P也会更新)
         for (int i = 0; i < n; i++) {
           P_.template block<3, 1>(idx, i) = res_temp_SO3 * (P_.template block<3, 1>(idx, i));
         }
@@ -1621,6 +1623,7 @@ class esekf {
         }
       }
 
+      /// 下述同上
       Matrix<scalar_type, 2, 2> res_temp_S2;
       MTK::vect<2, scalar_type> seg_S2;
       for (std::vector<std::pair<int, int>>::iterator it = x_.S2_state.begin(); it != x_.S2_state.end(); it++) {
@@ -1681,7 +1684,7 @@ class esekf {
         h_x_cur.col(10) = h_x_.col(10);
         h_x_cur.col(11) = h_x_.col(11);
         */
-
+        /// 计算卡尔曼增益
         Matrix<scalar_type, Eigen::Dynamic, Eigen::Dynamic> K_ =
             P_ * h_x_cur.transpose() *
             (h_x_cur * P_ * h_x_cur.transpose() / R +
@@ -1694,6 +1697,7 @@ class esekf {
         //	K_= P_ * h_x.transpose() * (h_x * P_ * h_x.transpose() + h_v * R * h_v.transpose()).inverse();
         //#endif
       } else {
+        /// 同样是计算卡尔曼增益,避免高维矩阵求逆
 #ifdef USE_sparse
         // Eigen::Matrix<scalar_type, n, n> b = Eigen::Matrix<scalar_type, n, n>::Identity();
         // Eigen::SparseQR<Eigen::SparseMatrix<scalar_type>, Eigen::COLAMDOrdering<int>> solver;
@@ -1762,8 +1766,10 @@ class esekf {
       }
 
       // K_x = K_ * h_x_;
+      /// 更新误差量
       Matrix<scalar_type, n, 1> dx_ = K_h + (K_x - Matrix<scalar_type, n, n>::Identity()) * dx_new;
       state x_before = x_;
+      /// 更新状态量
       x_.boxplus(dx_);
       dyn_share.converge = true;
       for (int i = 0; i < n; i++) {
@@ -1777,7 +1783,7 @@ class esekf {
       if (!t && i == maximum_iter - 2) {
         dyn_share.converge = true;
       }
-
+      /// 更新后验
       if (t > 1 || i == maximum_iter - 1) {
         L_ = P_;
         // std::cout << "iteration time" << t << "," << i << std::endl;
@@ -1879,6 +1885,7 @@ class esekf {
     }
   }
 
+  ///@brief 更改状态量
   void change_x(state& input_state) {
     x_ = input_state;
     if ((!x_.vect_state.size()) && (!x_.SO3_state.size()) && (!x_.S2_state.size())) {
@@ -1888,9 +1895,13 @@ class esekf {
     }
   }
 
+  ///@brief 更改协方差
   void change_P(cov& input_cov) { P_ = input_cov; }
 
+  ///@brief 获取状态量
   const state& get_x() const { return x_; }
+  
+  ///@brief 获取协方差
   const cov& get_P() const { return P_; }
 
  private:
