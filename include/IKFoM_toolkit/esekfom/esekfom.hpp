@@ -339,7 +339,6 @@ class esekf {
         seg_SO3(i) = -1 * f_(dim + i) * dt;  /// -[w-bg]*δt
       }
       MTK::SO3<scalar_type> res;
-      std::cout << "res.matrix: " << std::endl << res.matrix();
       /// Exp(SO3), 指数映射
       res.w() = MTK::exp<scalar_type, 3>(res.vec(), seg_SO3, scalar_type(1 / 2));
 #ifdef USE_sparse

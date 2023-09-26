@@ -32,7 +32,9 @@
 // CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
-#include <Python.h>
+#include <gflags/gflags.h>
+#include <glog/logging.h>
+//#include <Python.h>
 #include <fast_lio/CustomMsg.h>
 #include <geometry_msgs/Vector3.h>
 #include <ikd-Tree/ikd_Tree.h>
@@ -728,6 +730,11 @@ void h_share_model(state_ikfom& s, esekfom::dyn_share_datastruct<double>& ekfom_
 }
 
 int main(int argc, char** argv) {
+  google::InitGoogleLogging(argv[0]);
+  google::ParseCommandLineFlags(&argc, &argv, true);
+  FLAGS_stderrthreshold = google::INFO;
+  FLAGS_colorlogtostderr = true;
+
   ros::init(argc, argv, "laserMapping");
   ros::NodeHandle nh;
 

@@ -27,6 +27,7 @@ MTK_BUILD_MANIFOLD(input_ikfom,
                   ((vect3, gyro))
 );
 
+/// 噪声项
 MTK_BUILD_MANIFOLD(process_noise_ikfom,
                   ((vect3, ng))
                   ((vect3, na))
