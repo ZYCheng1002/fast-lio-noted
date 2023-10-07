@@ -38,7 +38,7 @@
 #include <fast_lio/CustomMsg.h>
 #include <geometry_msgs/Vector3.h>
 #include <ikd-Tree/ikd_Tree.h>
-#include <math.h>
+#include <cmath>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
 #include <omp.h>
@@ -97,7 +97,7 @@ double cube_len = 0, HALF_FOV_COS = 0, FOV_DEG = 0, total_distance = 0, lidar_en
 int effct_feat_num = 0, time_log_counter = 0, scan_count = 0, publish_count = 0;
 int iterCount = 0, feats_down_size = 0, NUM_MAX_ITERATIONS = 0, laserCloudValidNum = 0, pcd_save_interval = -1,
     pcd_index = 0;
-bool point_selected_surf[100000] = {0};
+bool point_selected_surf[100000] = {false};
 bool lidar_pushed, flg_first_scan = true, flg_exit = false, flg_EKF_inited;
 bool scan_pub_en = false, dense_pub_en = false, scan_body_pub_en = false;
 
@@ -765,7 +765,7 @@ int main(int argc, char** argv) {
   nh.param<int>("preprocess/scan_rate", p_pre->SCAN_RATE, 10);
   nh.param<int>("point_filter_num", p_pre->point_filter_num, 2);
   nh.param<bool>("feature_extract_enable", p_pre->feature_enabled, false);
-  nh.param<bool>("runtime_pos_log_enable", runtime_pos_log, 0);
+  nh.param<bool>("runtime_pos_log_enable", runtime_pos_log, false);
   nh.param<bool>("mapping/extrinsic_est_en", extrinsic_est_en, true);
   nh.param<bool>("pcd_save/pcd_save_en", pcd_save_en, false);
   nh.param<int>("pcd_save/interval", pcd_save_interval, -1);
@@ -780,7 +780,7 @@ int main(int argc, char** argv) {
   int effect_feat_num = 0, frame_num = 0;
   double deltaT, deltaR, aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0, aver_time_incre = 0,
                          aver_time_solve = 0, aver_time_const_H_time = 0;
-  bool flg_EKF_converged, EKF_stop_flg = 0;
+  bool flg_EKF_converged, EKF_stop_flg = false;
 
   FOV_DEG = (fov_deg + 10.0) > 179.9 ? 179.9 : (fov_deg + 10.0);
   HALF_FOV_COS = cos((FOV_DEG)*0.5 * PI_M / 180.0);
@@ -860,7 +860,7 @@ int main(int argc, char** argv) {
       state_point = kf.get_x();  /// 获取状态量
       pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
 
-      if (feats_undistort->empty() || (feats_undistort == NULL)) {
+      if (feats_undistort->empty() || (feats_undistort == nullptr)) {
         ROS_WARN("No point, skip this scan!\n");
         continue;
       }
