@@ -61,7 +61,12 @@ find_package(catkin REQUIRED COMPONENTS
 include_directories(
         ${catkin_INCLUDE_DIRS}
         include
+        src
         ${CATKIN_DEVEL_PREFIX}/include
+)
+
+include_directories(
+        ${PROJECT_SOURCE_DIR}/../../devel/include
 )
 
 add_message_files(
@@ -82,6 +87,6 @@ catkin_package(
         INCLUDE_DIRS
 )
 
-add_executable(fastlio_mapping src/laserMapping.cpp include/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp)
+add_executable(fastlio_mapping src/laserMapping.cpp src/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp)
 target_link_libraries(fastlio_mapping ${catkin_LIBRARIES} ${third_party})
 target_include_directories(fastlio_mapping PRIVATE ${PYTHON_INCLUDE_DIRS})
