@@ -48,9 +48,9 @@ class LioMapping {
 
   void rosParamInit();
 
-  inline void dump_lio_state_to_log(FILE* fp);
+  inline void dumpLioStateToLog(FILE* fp);
 
-  void pointBodyToWorld_ikfom(PointType const* const pi, PointType* const po, state_ikfom& s);
+  void pointBodyToWorldIkfom(PointType const* const pi, PointType* const po, state_ikfom& s);
 
   ///@brief 将点转为世界坐标系
   void pointBodyToWorld(PointType const* const pi, PointType* const po);
@@ -59,48 +59,48 @@ class LioMapping {
   void pointBodyToWorld(const Matrix<T, 3, 1>& pi, Matrix<T, 3, 1>& po);
 
   ///@brief 点转到世界坐标系下的imu坐标系
-  void RGBpointBodyToWorld(PointType const* const pi, PointType* const po);
+  void rgbPointBodyToWorld(PointType const* const pi, PointType* const po);
 
   ///@brief 点转到imu坐标系下
-  void RGBpointBodyLidarToIMU(PointType const* const pi, PointType* const po);
+  void rgbPointBodyLidarToIMU(PointType const* const pi, PointType* const po);
 
-  void points_cache_collect();
+  void pointsCacheCollect();
 
-  void lasermap_fov_segment();
+  void lasermapFovSegment();
 
   ///@brief ros msg回调函数
-  void standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr& msg);
+  void standardPclCbk(const sensor_msgs::PointCloud2::ConstPtr& msg);
 
   ///@brief livox msg回调函数
-  void livox_pcl_cbk(const fast_lio::CustomMsg::ConstPtr& msg);
+  void livoxPclCbk(const fast_lio::CustomMsg::ConstPtr& msg);
 
   ///@brief imu回调函数
-  void imu_cbk(const sensor_msgs::Imu::ConstPtr& msg_in);
+  void imuCbk(const sensor_msgs::Imu::ConstPtr& msg_in);
 
   ///@brief msg的时间同步
-  bool sync_packages(MeasureGroup& meas);
+  bool syncPackages(MeasureGroup& meas);
 
   ///@brief ikdtree增量地图
-  void map_incremental();
+  void mapIncremental();
 
   ///@brief 发布世界坐标系下的单帧点云
-  void publish_frame_world(const ros::Publisher& pubLaserCloudFull);
+  void publishFrameWorld(const ros::Publisher& pubLaserCloudFull);
 
-  void publish_frame_body(const ros::Publisher& pubLaserCloudFull_body);
+  void publishFrameBody(const ros::Publisher& pubLaserCloudFull_body);
 
-  void publish_effect_world(const ros::Publisher& pubLaserCloudEffect);
+  void publishEffectWorld(const ros::Publisher& pubLaserCloudEffect);
 
-  void publish_map(const ros::Publisher& pubLaserCloudMap);
+  void publishMap(const ros::Publisher& pubLaserCloudMap);
 
   ///@brief 赋值世界坐标系下的imu位姿
   template <typename T>
-  void set_posestamp(T& out);
+  void setPosestamp(T& out);
 
-  void publish_odometry(const ros::Publisher& pubOdomAftMapped);
+  void publishOdometry(const ros::Publisher& pubOdomAftMapped);
 
-  void publish_path(const ros::Publisher pubPath);
+  void publishPath(const ros::Publisher pubPath);
 
-  void h_share_model(state_ikfom& s, esekfom::dyn_share_datastruct<double>& ekfom_data);
+  void hShareModel(state_ikfom& s, esekfom::dyn_share_datastruct<double>& ekfom_data);
 
  private:
   ros::NodeHandle nh_;

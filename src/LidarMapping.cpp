@@ -43,7 +43,7 @@ void LioMapping::run() {
       get_f,
       df_dx,
       df_dw,
-      [this](state_ikfom& s, esekfom::dyn_share_datastruct<double>& ekfom_data) { h_share_model(s, ekfom_data); },
+      [this](state_ikfom& s, esekfom::dyn_share_datastruct<double>& ekfom_data) { hShareModel(s, ekfom_data); },
       NUM_MAX_ITERATIONS,
       epsi);
 
@@ -65,11 +65,11 @@ void LioMapping::run() {
   ros::Subscriber sub_pcl =
       p_pre->lidar_type == AVIA
           ? nh_.subscribe<fast_lio::CustomMsg>(
-                lid_topic, 200000, [this](const fast_lio::CustomMsg::ConstPtr& msg) { livox_pcl_cbk(msg); })
+                lid_topic, 200000, [this](const fast_lio::CustomMsg::ConstPtr& msg) { livoxPclCbk(msg); })
           : nh_.subscribe<sensor_msgs::PointCloud2>(
-                lid_topic, 200000, [this](const sensor_msgs::PointCloud2::ConstPtr& msg) { standard_pcl_cbk(msg); });
+                lid_topic, 200000, [this](const sensor_msgs::PointCloud2::ConstPtr& msg) { standardPclCbk(msg); });
   ros::Subscriber sub_imu = nh_.subscribe<sensor_msgs::Imu>(
-      imu_topic, 200000, [this](const sensor_msgs::Imu::ConstPtr& msg) { imu_cbk(msg); });
+      imu_topic, 200000, [this](const sensor_msgs::Imu::ConstPtr& msg) { imuCbk(msg); });
   ros::Publisher pubLaserCloudFull = nh_.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100000);
   ros::Publisher pubLaserCloudFull_body = nh_.advertise<sensor_msgs::PointCloud2>("/cloud_registered_body", 100000);
   ros::Publisher pubLaserCloudEffect = nh_.advertise<sensor_msgs::PointCloud2>("/cloud_effected", 100000);
@@ -87,7 +87,7 @@ void LioMapping::run() {
     if (flg_exit) break;
     ros::spinOnce();
     /// measures为一帧lidar和多帧imu
-    if (sync_packages(Measures)) {
+    if (syncPackages(Measures)) {
       /// 首帧初始化
       if (flg_first_scan) {
         first_lidar_time = Measures.lidar_beg_time;
@@ -116,7 +116,7 @@ void LioMapping::run() {
       /// 通过时间判断是否完成初始化
       flg_EKF_inited = (Measures.lidar_beg_time - first_lidar_time) < INIT_TIME_LIO ? false : true;
       /// 根据lidar pose获取周围box信息
-      lasermap_fov_segment();
+      lasermapFovSegment();
 
       downSizeFilterSurf.setInputCloud(feats_undistort);
       downSizeFilterSurf.filter(*feats_down_body);
@@ -184,17 +184,17 @@ void LioMapping::run() {
       double t_update_end = omp_get_wtime();
 
       /// 发布里程计信息
-      publish_odometry(pubOdomAftMapped);
+      publishOdometry(pubOdomAftMapped);
 
       /*** add the feature points to map kdtree ***/
       t3 = omp_get_wtime();
-      map_incremental();
+      mapIncremental();
       t5 = omp_get_wtime();
 
       /******* Publish points *******/
-      if (path_en) publish_path(pubPath);
-      if (scan_pub_en || pcd_save_en) publish_frame_world(pubLaserCloudFull);
-      if (scan_pub_en && scan_body_pub_en) publish_frame_body(pubLaserCloudFull_body);
+      if (path_en) publishPath(pubPath);
+      if (scan_pub_en || pcd_save_en) publishFrameWorld(pubLaserCloudFull);
+      if (scan_pub_en && scan_body_pub_en) publishFrameBody(pubLaserCloudFull_body);
       // publish_effect_world(pubLaserCloudEffect);
       // publish_map(pubLaserCloudMap);
 
@@ -237,7 +237,7 @@ void LioMapping::run() {
                  << state_point.offset_T_L_I.transpose() << " " << state_point.vel.transpose() << " "
                  << state_point.bg.transpose() << " " << state_point.ba.transpose() << " " << state_point.grav << " "
                  << feats_undistort->points.size() << endl;
-        dump_lio_state_to_log(fp);
+        dumpLioStateToLog(fp);
       }
     }
 
@@ -351,7 +351,7 @@ void LioMapping::rosParamInit() {
   path.header.frame_id = "camera_init";
 }
 
-inline void LioMapping::dump_lio_state_to_log(FILE* fp) {
+inline void LioMapping::dumpLioStateToLog(FILE* fp) {
   V3D rot_ang(Log(state_point.rot.toRotationMatrix()));
   fprintf(fp, "%lf ", Measures.lidar_beg_time - first_lidar_time);
   fprintf(fp, "%lf %lf %lf ", rot_ang(0), rot_ang(1), rot_ang(2));                             // Angle
@@ -366,7 +366,7 @@ inline void LioMapping::dump_lio_state_to_log(FILE* fp) {
   fflush(fp);
 }
 
-void LioMapping::pointBodyToWorld_ikfom(PointType const* const pi, PointType* const po, state_ikfom& s) {
+void LioMapping::pointBodyToWorldIkfom(PointType const* const pi, PointType* const po, state_ikfom& s) {
   V3D p_body(pi->x, pi->y, pi->z);
   V3D p_global(s.rot * (s.offset_R_L_I * p_body + s.offset_T_L_I) + s.pos);
 
@@ -396,7 +396,7 @@ void LioMapping::pointBodyToWorld(const Matrix<T, 3, 1>& pi, Matrix<T, 3, 1>& po
   po[2] = p_global(2);
 }
 
-void LioMapping::RGBpointBodyToWorld(PointType const* const pi, PointType* const po) {
+void LioMapping::rgbPointBodyToWorld(PointType const* const pi, PointType* const po) {
   V3D p_body(pi->x, pi->y, pi->z);
   V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
 
@@ -406,7 +406,7 @@ void LioMapping::RGBpointBodyToWorld(PointType const* const pi, PointType* const
   po->intensity = pi->intensity;
 }
 
-void LioMapping::RGBpointBodyLidarToIMU(PointType const* const pi, PointType* const po) {
+void LioMapping::rgbPointBodyLidarToIMU(PointType const* const pi, PointType* const po) {
   V3D p_body_lidar(pi->x, pi->y, pi->z);
   V3D p_body_imu(state_point.offset_R_L_I * p_body_lidar + state_point.offset_T_L_I);
 
@@ -416,13 +416,13 @@ void LioMapping::RGBpointBodyLidarToIMU(PointType const* const pi, PointType* co
   po->intensity = pi->intensity;
 }
 
-void LioMapping::points_cache_collect() {
+void LioMapping::pointsCacheCollect() {
   PointVector points_history;
   ikdtree->acquire_removed_points(points_history);
   // for (int i = 0; i < points_history.size(); i++) _featsArray->push_back(points_history[i]);
 }
 
-void LioMapping::lasermap_fov_segment() {
+void LioMapping::lasermapFovSegment() {
   cub_needrm.clear();
   kdtree_delete_counter = 0;
   kdtree_delete_time = 0.0;
@@ -469,14 +469,14 @@ void LioMapping::lasermap_fov_segment() {
   }
   LocalMap_Points = New_LocalMap_Points;
 
-  points_cache_collect();
+  pointsCacheCollect();
   double delete_begin = omp_get_wtime();
   /// 删除
   if (cub_needrm.size() > 0) kdtree_delete_counter = ikdtree->Delete_Point_Boxes(cub_needrm);
   kdtree_delete_time = omp_get_wtime() - delete_begin;
 }
 
-void LioMapping::standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr& msg) {
+void LioMapping::standardPclCbk(const sensor_msgs::PointCloud2::ConstPtr& msg) {
   mtx_buffer.lock();
   scan_count++;
   double preprocess_start_time = omp_get_wtime();
@@ -495,7 +495,7 @@ void LioMapping::standard_pcl_cbk(const sensor_msgs::PointCloud2::ConstPtr& msg)
   sig_buffer.notify_all();
 }
 
-void LioMapping::livox_pcl_cbk(const fast_lio::CustomMsg::ConstPtr& msg) {
+void LioMapping::livoxPclCbk(const fast_lio::CustomMsg::ConstPtr& msg) {
   mtx_buffer.lock();
   double preprocess_start_time = omp_get_wtime();
   scan_count++;
@@ -527,7 +527,7 @@ void LioMapping::livox_pcl_cbk(const fast_lio::CustomMsg::ConstPtr& msg) {
   sig_buffer.notify_all();
 }
 
-void LioMapping::imu_cbk(const sensor_msgs::Imu::ConstPtr& msg_in) {
+void LioMapping::imuCbk(const sensor_msgs::Imu::ConstPtr& msg_in) {
   publish_count++;
   // cout<<"IMU got at: "<<msg_in->header.stamp.toSec()<<endl;
   sensor_msgs::Imu::Ptr msg(new sensor_msgs::Imu(*msg_in));
@@ -553,7 +553,7 @@ void LioMapping::imu_cbk(const sensor_msgs::Imu::ConstPtr& msg_in) {
   sig_buffer.notify_all();
 }
 
-bool LioMapping::sync_packages(MeasureGroup& meas) {
+bool LioMapping::syncPackages(MeasureGroup& meas) {
   if (lidar_buffer.empty() || imu_buffer.empty()) {
     return false;
   }
@@ -599,7 +599,7 @@ bool LioMapping::sync_packages(MeasureGroup& meas) {
   return true;
 }
 
-void LioMapping::map_incremental() {
+void LioMapping::mapIncremental() {
   PointVector PointToAdd;
   PointVector PointNoNeedDownsample;
   PointToAdd.reserve(feats_down_size);
@@ -646,14 +646,14 @@ void LioMapping::map_incremental() {
   kdtree_incremental_time = omp_get_wtime() - st_time;
 }
 
-void LioMapping::publish_frame_world(const ros::Publisher& pubLaserCloudFull) {
+void LioMapping::publishFrameWorld(const ros::Publisher& pubLaserCloudFull) {
   if (scan_pub_en) {
     PointCloudXYZI::Ptr laserCloudFullRes(dense_pub_en ? feats_undistort : feats_down_body);
     int size = laserCloudFullRes->points.size();
     PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
 
     for (int i = 0; i < size; i++) {
-      RGBpointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudWorld->points[i]);
+      rgbPointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudWorld->points[i]);
     }
 
     sensor_msgs::PointCloud2 laserCloudmsg;
@@ -672,7 +672,7 @@ void LioMapping::publish_frame_world(const ros::Publisher& pubLaserCloudFull) {
     PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
 
     for (int i = 0; i < size; i++) {
-      RGBpointBodyToWorld(&feats_undistort->points[i], &laserCloudWorld->points[i]);
+      rgbPointBodyToWorld(&feats_undistort->points[i], &laserCloudWorld->points[i]);
     }
     *pcl_wait_save += *laserCloudWorld;
 
@@ -690,12 +690,12 @@ void LioMapping::publish_frame_world(const ros::Publisher& pubLaserCloudFull) {
   }
 }
 
-void LioMapping::publish_frame_body(const ros::Publisher& pubLaserCloudFull_body) {
+void LioMapping::publishFrameBody(const ros::Publisher& pubLaserCloudFull_body) {
   int size = feats_undistort->points.size();
   PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size, 1));
 
   for (int i = 0; i < size; i++) {
-    RGBpointBodyLidarToIMU(&feats_undistort->points[i], &laserCloudIMUBody->points[i]);
+    rgbPointBodyLidarToIMU(&feats_undistort->points[i], &laserCloudIMUBody->points[i]);
   }
 
   sensor_msgs::PointCloud2 laserCloudmsg;
@@ -706,10 +706,10 @@ void LioMapping::publish_frame_body(const ros::Publisher& pubLaserCloudFull_body
   publish_count -= PUBFRAME_PERIOD_LIO;
 }
 
-void LioMapping::publish_effect_world(const ros::Publisher& pubLaserCloudEffect) {
+void LioMapping::publishEffectWorld(const ros::Publisher& pubLaserCloudEffect) {
   PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(effct_feat_num, 1));
   for (int i = 0; i < effct_feat_num; i++) {
-    RGBpointBodyToWorld(&laserCloudOri->points[i], &laserCloudWorld->points[i]);
+    rgbPointBodyToWorld(&laserCloudOri->points[i], &laserCloudWorld->points[i]);
   }
   sensor_msgs::PointCloud2 laserCloudFullRes3;
   pcl::toROSMsg(*laserCloudWorld, laserCloudFullRes3);
@@ -718,7 +718,7 @@ void LioMapping::publish_effect_world(const ros::Publisher& pubLaserCloudEffect)
   pubLaserCloudEffect.publish(laserCloudFullRes3);
 }
 
-void LioMapping::publish_map(const ros::Publisher& pubLaserCloudMap) {
+void LioMapping::publishMap(const ros::Publisher& pubLaserCloudMap) {
   sensor_msgs::PointCloud2 laserCloudMap;
   pcl::toROSMsg(*featsFromMap, laserCloudMap);
   laserCloudMap.header.stamp = ros::Time().fromSec(lidar_end_time);
@@ -727,7 +727,7 @@ void LioMapping::publish_map(const ros::Publisher& pubLaserCloudMap) {
 }
 
 template <typename T>
-void LioMapping::set_posestamp(T& out) {
+void LioMapping::setPosestamp(T& out) {
   out.pose.position.x = state_point.pos(0);
   out.pose.position.y = state_point.pos(1);
   out.pose.position.z = state_point.pos(2);
@@ -737,11 +737,11 @@ void LioMapping::set_posestamp(T& out) {
   out.pose.orientation.w = geoQuat.w;
 }
 
-void LioMapping::publish_odometry(const ros::Publisher& pubOdomAftMapped) {
+void LioMapping::publishOdometry(const ros::Publisher& pubOdomAftMapped) {
   odomAftMapped.header.frame_id = "camera_init";
   odomAftMapped.child_frame_id = "body";
   odomAftMapped.header.stamp = ros::Time().fromSec(lidar_end_time);  // ros::Time().fromSec(lidar_end_time);
-  set_posestamp(odomAftMapped.pose);
+  setPosestamp(odomAftMapped.pose);
   pubOdomAftMapped.publish(odomAftMapped);
   auto P = kf.get_P();
   for (int i = 0; i < 6; i++) {
@@ -767,8 +767,8 @@ void LioMapping::publish_odometry(const ros::Publisher& pubOdomAftMapped) {
   br.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, "camera_init", "body"));
 }
 
-void LioMapping::publish_path(const ros::Publisher pubPath) {
-  set_posestamp(msg_body_pose);
+void LioMapping::publishPath(const ros::Publisher pubPath) {
+  setPosestamp(msg_body_pose);
   msg_body_pose.header.stamp = ros::Time().fromSec(lidar_end_time);
   msg_body_pose.header.frame_id = "camera_init";
 
@@ -781,7 +781,7 @@ void LioMapping::publish_path(const ros::Publisher pubPath) {
   }
 }
 
-void LioMapping::h_share_model(state_ikfom& s, esekfom::dyn_share_datastruct<double>& ekfom_data) {
+void LioMapping::hShareModel(state_ikfom& s, esekfom::dyn_share_datastruct<double>& ekfom_data) {
   double match_start = omp_get_wtime();
   laserCloudOri->clear();
   corr_normvect->clear();
