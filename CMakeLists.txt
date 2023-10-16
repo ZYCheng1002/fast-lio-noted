@@ -87,9 +87,11 @@ catkin_package(
         INCLUDE_DIRS
 )
 
-add_executable(fastlio_mapping src/laserMapping.cpp src/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp)
-target_link_libraries(fastlio_mapping ${catkin_LIBRARIES} ${third_party})
-target_include_directories(fastlio_mapping PRIVATE ${PYTHON_INCLUDE_DIRS})
+#add_executable(fastlio_mapping src/laserMapping.cpp src/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp)
+#target_link_libraries(fastlio_mapping ${catkin_LIBRARIES} ${third_party})
+#target_include_directories(fastlio_mapping PRIVATE ${PYTHON_INCLUDE_DIRS})
 
-add_executable(lio_mapping  src/LidarMapping.cpp src/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp)
-target_link_libraries(lio_mapping ${catkin_LIBRARIES} ${third_party})
+add_library(${PROJECT_NAME}_lio src/LidarMapping.cpp)
+
+add_executable(lio_mapping  src/LioMapping.cpp src/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp)
+target_link_libraries(lio_mapping ${catkin_LIBRARIES} ${third_party} ${PROJECT_NAME}_lio)

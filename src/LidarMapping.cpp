@@ -57,9 +57,9 @@ void LioMapping::run() {
   fout_out.open(DEBUG_FILE_DIR("mat_out.txt"), ios::out);
   fout_dbg.open(DEBUG_FILE_DIR("dbg.txt"), ios::out);
   if (fout_pre && fout_out)
-    cout << "~~~~" << ROOT_DIR << " file opened" << endl;
+    LOG(INFO) << "~~~~" << ROOT_DIR << " file opened";
   else
-    cout << "~~~~" << ROOT_DIR << " doesn't exist" << endl;
+    LOG(INFO) << "~~~~" << ROOT_DIR << " doesn't exist";
 
   /*** ROS subscribe initialization ***/
   ros::Subscriber sub_pcl =
@@ -252,7 +252,7 @@ void LioMapping::run() {
     string file_name = string("scans.pcd");
     string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
     pcl::PCDWriter pcd_writer;
-    cout << "current scan saved to /PCD/" << file_name << endl;
+    LOG(INFO) << "current scan saved to /PCD/" << file_name;
     pcl::VoxelGrid<PointType> down;
     down.setLeafSize(0.3f, 0.3f, 0.3f);
     down.setInputCloud(pcl_wait_save);
@@ -682,7 +682,7 @@ void LioMapping::publishFrameWorld(const ros::Publisher& pubLaserCloudFull) {
       pcd_index++;
       string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_") + to_string(pcd_index) + string(".pcd"));
       pcl::PCDWriter pcd_writer;
-      cout << "current scan saved to /PCD/" << all_points_dir << endl;
+      LOG(INFO) << "current scan saved to /PCD/" << all_points_dir;
       pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
       pcl_wait_save->clear();
       scan_wait_num = 0;
@@ -903,18 +903,4 @@ void LioMapping::hShareModel(state_ikfom& s, esekfom::dyn_share_datastruct<doubl
     ekfom_data.h(i) = -norm_p.intensity;  /// 观测的残差
   }
   solve_time += omp_get_wtime() - solve_start_;
-}
-
-int main(int argc, char** argv) {
-  google::InitGoogleLogging(argv[0]);
-  google::ParseCommandLineFlags(&argc, &argv, true);
-  FLAGS_stderrthreshold = google::INFO;
-  FLAGS_colorlogtostderr = true;
-
-  ros::init(argc, argv, "laserMapping");
-  ros::NodeHandle nh;
-  LioMapping lio_mapping(nh);
-  lio_mapping.run();
-
-  return 0;
 }
