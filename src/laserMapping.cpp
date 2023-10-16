@@ -122,7 +122,8 @@ PointCloudXYZI::Ptr _featsArray;
 pcl::VoxelGrid<PointType> downSizeFilterSurf;
 pcl::VoxelGrid<PointType> downSizeFilterMap;
 
-KD_TREE<PointType> ikdtree;
+//KD_TREE<PointType> ikdtree;
+std::shared_ptr<KD_TREE<PointType>> ikdtree (new KD_TREE<PointType>());
 
 V3F XAxisPoint_body(LIDAR_SP_LEN, 0.0, 0.0);
 V3F XAxisPoint_world(LIDAR_SP_LEN, 0.0, 0.0);
@@ -221,7 +222,7 @@ void RGBpointBodyLidarToIMU(PointType const* const pi, PointType* const po) {
 
 void points_cache_collect() {
   PointVector points_history;
-  ikdtree.acquire_removed_points(points_history);
+  ikdtree->acquire_removed_points(points_history);
   // for (int i = 0; i < points_history.size(); i++) _featsArray->push_back(points_history[i]);
 }
 
@@ -278,7 +279,7 @@ void lasermap_fov_segment() {
   points_cache_collect();
   double delete_begin = omp_get_wtime();
   /// 删除
-  if (cub_needrm.size() > 0) kdtree_delete_counter = ikdtree.Delete_Point_Boxes(cub_needrm);
+  if (cub_needrm.size() > 0) kdtree_delete_counter = ikdtree->Delete_Point_Boxes(cub_needrm);
   kdtree_delete_time = omp_get_wtime() - delete_begin;
 }
 
@@ -459,8 +460,8 @@ void map_incremental() {
   }
 
   double st_time = omp_get_wtime();
-  add_point_size = ikdtree.Add_Points(PointToAdd, true);
-  ikdtree.Add_Points(PointNoNeedDownsample, false);
+  add_point_size = ikdtree->Add_Points(PointToAdd, true);
+  ikdtree->Add_Points(PointNoNeedDownsample, false);
   add_point_size = PointToAdd.size() + PointNoNeedDownsample.size();
   kdtree_incremental_time = omp_get_wtime() - st_time;
 }
@@ -644,7 +645,7 @@ void h_share_model(state_ikfom& s, esekfom::dyn_share_datastruct<double>& ekfom_
     /// 收敛的情况下
     if (ekfom_data.converge) {
       /// 在ikdtree中查找改点的最近邻
-      ikdtree.Nearest_Search(point_world, NUM_MATCH_POINTS, points_near, pointSearchSqDis);
+      ikdtree->Nearest_Search(point_world, NUM_MATCH_POINTS, points_near, pointSearchSqDis);
       /// 通过点数和距离判断有效性
       point_selected_surf[i] = points_near.size() < NUM_MATCH_POINTS        ? false
                                : pointSearchSqDis[NUM_MATCH_POINTS - 1] > 5 ? false
@@ -874,19 +875,19 @@ int main(int argc, char** argv) {
       t1 = omp_get_wtime();
       feats_down_size = feats_down_body->points.size();
       /// 初始化ikdtree
-      if (ikdtree.Root_Node == nullptr) {
+      if (ikdtree->Root_Node == nullptr) {
         if (feats_down_size > 5) {
-          ikdtree.set_downsample_param(filter_size_map_min);
+          ikdtree->set_downsample_param(filter_size_map_min);
           feats_down_world->resize(feats_down_size);
           for (int i = 0; i < feats_down_size; i++) {
             pointBodyToWorld(&(feats_down_body->points[i]), &(feats_down_world->points[i]));
           }
-          ikdtree.Build(feats_down_world->points);
+          ikdtree->Build(feats_down_world->points);
         }
         continue;
       }
-      int featsFromMapNum = ikdtree.validnum();
-      kdtree_size_st = ikdtree.size();
+      int featsFromMapNum = ikdtree->validnum();
+      kdtree_size_st = ikdtree->size();
 
       /*** ICP and iterated Kalman filter update ***/
       if (feats_down_size < 5) {
@@ -905,10 +906,10 @@ int main(int argc, char** argv) {
 
       if (0)  // If you need to see map point, change to "if(1)"
       {
-        PointVector().swap(ikdtree.PCL_Storage);
-        ikdtree.flatten(ikdtree.Root_Node, ikdtree.PCL_Storage, NOT_RECORD);
+        PointVector().swap(ikdtree->PCL_Storage);
+        ikdtree->flatten(ikdtree->Root_Node, ikdtree->PCL_Storage, NOT_RECORD);
         featsFromMap->clear();
-        featsFromMap->points = ikdtree.PCL_Storage;
+        featsFromMap->points = ikdtree->PCL_Storage;
       }
 
       pointSearchInd_surf.resize(feats_down_size);
@@ -952,7 +953,7 @@ int main(int argc, char** argv) {
       /*** Debug variables ***/
       if (runtime_pos_log) {
         frame_num++;
-        kdtree_size_end = ikdtree.size();
+        kdtree_size_end = ikdtree->size();
         aver_time_consu = aver_time_consu * (frame_num - 1) / frame_num + (t5 - t0) / frame_num;
         aver_time_icp = aver_time_icp * (frame_num - 1) / frame_num + (t_update_end - t_update_start) / frame_num;
         aver_time_match = aver_time_match * (frame_num - 1) / frame_num + (match_time) / frame_num;
