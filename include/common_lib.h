@@ -245,4 +245,36 @@ bool esti_plane(Matrix<T, 4, 1>& pca_result, const PointVector& point, const T& 
   return true;
 }
 
+struct PoseWithTime {
+  PoseWithTime(double time, V3D p, const Eigen::Quaterniond& q, Eigen::Matrix<double, 6, 6> cov) {
+    timestamp = time;
+    position = std::move(p);
+    quat = q;
+    pose_cov = std::move(cov);
+  }
+  PoseWithTime() = default;
+  double timestamp = 0.0;
+  Eigen::Matrix<double, 6, 6> pose_cov;
+  Eigen::Quaterniond quat;
+  V3D position;
+};
+
+struct CloudWithTime {
+  CloudWithTime() {
+    cloud_w.reset(new PointCloudXYZI());
+    cloud_b.reset(new PointCloudXYZI());
+  }
+  CloudWithTime(double time, const PointCloudXYZI& w, const PointCloudXYZI& b) {
+    timestamp = time;
+    cloud_w.reset(new PointCloudXYZI());
+    *cloud_w = w;
+    cloud_b.reset(new PointCloudXYZI());
+    *cloud_b = b;
+  }
+
+  double timestamp = 0.0;
+  PointCloudXYZI::Ptr cloud_w;  // cloud world
+  PointCloudXYZI::Ptr cloud_b;  // cloud body
+};
+
 #endif

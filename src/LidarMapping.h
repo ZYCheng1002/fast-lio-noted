@@ -43,7 +43,16 @@ class LioMapping {
  public:
   LioMapping(const ros::NodeHandle& nh) { nh_ = nh; }
   void run();
+  void exit() {
+    exit_flag = true;
+    sig_buffer.notify_all();
+  }
 
+  bool getOdom(PoseWithTime& pose);
+
+  bool getPointCloud(CloudWithTime& cloud);
+
+ private:
   void memoryInit();
 
   void rosParamInit();
@@ -84,8 +93,9 @@ class LioMapping {
   void mapIncremental();
 
   ///@brief 发布世界坐标系下的单帧点云
+  ///@note 已剥离
   void publishFrameWorld(const ros::Publisher& pubLaserCloudFull);
-
+  ///@note 已剥离
   void publishFrameBody(const ros::Publisher& pubLaserCloudFull_body);
 
   void publishEffectWorld(const ros::Publisher& pubLaserCloudEffect);
@@ -96,6 +106,7 @@ class LioMapping {
   template <typename T>
   void setPosestamp(T& out);
 
+  ///@note 已剥离
   void publishOdometry(const ros::Publisher& pubOdomAftMapped);
 
   void publishPath(const ros::Publisher pubPath);
@@ -191,6 +202,9 @@ class LioMapping {
 
   double lidar_mean_scantime = 0.0;
   int scan_num = 0;
+  bool exit_flag = false;
+  std::atomic<bool> odom_update{false};
+  std::atomic<bool> cloud_update{false};
 };
 
 #endif  // FAST_LIO_LIDARMAPPING_H

@@ -3,10 +3,56 @@
 //
 #include "LidarMapping.h"
 
-bool flg_exit = false;
-void SigHandle(int sig) {
-  flg_exit = true;
-  ROS_WARN("catch sig %d", sig);
+bool LioMapping::getOdom(PoseWithTime& pose) {
+  if (!odom_update.load()) {
+    return false;
+  }
+  odom_update.store(false);
+  pose.timestamp = lidar_end_time;
+  pose.position = V3D(state_point.pos(0), state_point.pos(1), state_point.pos(2));
+  pose.quat.w() = geoQuat.w;
+  pose.quat.x() = geoQuat.x;
+  pose.quat.y() = geoQuat.y;
+  pose.quat.z() = geoQuat.z;
+
+  auto P = kf.get_P();
+  for (int i = 0; i < 6; i++) {
+    int k = i < 3 ? i + 3 : i - 3;
+    pose.pose_cov(i * 6 + 0) = P(k, 3);
+    pose.pose_cov(i * 6 + 1) = P(k, 4);
+    pose.pose_cov(i * 6 + 2) = P(k, 5);
+    pose.pose_cov(i * 6 + 3) = P(k, 0);
+    pose.pose_cov(i * 6 + 4) = P(k, 1);
+    pose.pose_cov(i * 6 + 5) = P(k, 2);
+  }
+  return true;
+}
+
+bool LioMapping::getPointCloud(CloudWithTime& cloud) {
+  if (!cloud_update.load()) {
+    return false;
+  }
+  cloud_update.store(false);
+  cloud.timestamp = lidar_end_time;
+  if (scan_pub_en) {
+    PointCloudXYZI::Ptr laserCloudFullRes(dense_pub_en ? feats_undistort : feats_down_body);
+    int size = laserCloudFullRes->points.size();
+    PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
+
+    for (int i = 0; i < size; i++) {
+      rgbPointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudWorld->points[i]);
+    }
+    *cloud.cloud_w = *laserCloudWorld;
+  }
+
+  int size = feats_undistort->points.size();
+  PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size, 1));
+  for (int i = 0; i < size; i++) {
+    rgbPointBodyLidarToIMU(&feats_undistort->points[i], &laserCloudIMUBody->points[i]);
+  }
+  sensor_msgs::PointCloud2 laserCloudmsg;
+  *cloud.cloud_b = *laserCloudIMUBody;
+  return true;
 }
 
 void LioMapping::run() {
@@ -77,14 +123,13 @@ void LioMapping::run() {
   ros::Publisher pubOdomAftMapped = nh_.advertise<nav_msgs::Odometry>("/Odometry", 100000);
   ros::Publisher pubPath = nh_.advertise<nav_msgs::Path>("/path", 100000);
   //------------------------------------------------------------------------------------------------------
-  signal(SIGINT, SigHandle);
   ros::Rate rate(5000);
   bool status = ros::ok();
 
   ///--------------------------------------------------------
 
   while (status) {
-    if (flg_exit) break;
+    if (exit_flag) break;
     ros::spinOnce();
     /// measures为一帧lidar和多帧imu
     if (syncPackages(Measures)) {
@@ -184,8 +229,8 @@ void LioMapping::run() {
       double t_update_end = omp_get_wtime();
 
       /// 发布里程计信息
-      publishOdometry(pubOdomAftMapped);
-
+      /// publishOdometry(pubOdomAftMapped);
+      odom_update.store(true);
       /*** add the feature points to map kdtree ***/
       t3 = omp_get_wtime();
       mapIncremental();
@@ -193,8 +238,13 @@ void LioMapping::run() {
 
       /******* Publish points *******/
       if (path_en) publishPath(pubPath);
-      if (scan_pub_en || pcd_save_en) publishFrameWorld(pubLaserCloudFull);
-      if (scan_pub_en && scan_body_pub_en) publishFrameBody(pubLaserCloudFull_body);
+      if (scan_pub_en || pcd_save_en) {
+//        publishFrameWorld(pubLaserCloudFull);
+      }
+      if (scan_pub_en && scan_body_pub_en) {
+//        publishFrameBody(pubLaserCloudFull_body);
+      }
+      cloud_update.store(true);
       // publish_effect_world(pubLaserCloudEffect);
       // publish_map(pubLaserCloudMap);
 
