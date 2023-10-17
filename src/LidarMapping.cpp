@@ -36,7 +36,7 @@ bool LioMapping::getPointCloud(CloudWithTime& cloud) {
   cloud.timestamp = lidar_end_time;
   if (scan_pub_en) {
     PointCloudXYZI::Ptr laserCloudFullRes(dense_pub_en ? feats_undistort : feats_down_body);
-    int size = laserCloudFullRes->points.size();
+    std::size_t size = laserCloudFullRes->points.size();
     PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
 
     for (int i = 0; i < size; i++) {
@@ -45,13 +45,24 @@ bool LioMapping::getPointCloud(CloudWithTime& cloud) {
     *cloud.cloud_w = *laserCloudWorld;
   }
 
-  int size = feats_undistort->points.size();
+  std::size_t size = feats_undistort->points.size();
   PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size, 1));
   for (int i = 0; i < size; i++) {
     rgbPointBodyLidarToIMU(&feats_undistort->points[i], &laserCloudIMUBody->points[i]);
   }
   sensor_msgs::PointCloud2 laserCloudmsg;
   *cloud.cloud_b = *laserCloudIMUBody;
+  return true;
+}
+
+bool LioMapping::getCloudMap(CloudWithTime& cloud) {
+  if (!cloud_map_update.load()) {
+    return false;
+  }
+  cloud_map_update.store(false);
+  cloud.cloud_w->clear();
+  *cloud.cloud_w = *featsFromMap;
+  cloud.timestamp = lidar_end_time;
   return true;
 }
 
@@ -116,12 +127,12 @@ void LioMapping::run() {
                 lid_topic, 200000, [this](const sensor_msgs::PointCloud2::ConstPtr& msg) { standardPclCbk(msg); });
   ros::Subscriber sub_imu = nh_.subscribe<sensor_msgs::Imu>(
       imu_topic, 200000, [this](const sensor_msgs::Imu::ConstPtr& msg) { imuCbk(msg); });
-  ros::Publisher pubLaserCloudFull = nh_.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100000);
-  ros::Publisher pubLaserCloudFull_body = nh_.advertise<sensor_msgs::PointCloud2>("/cloud_registered_body", 100000);
-  ros::Publisher pubLaserCloudEffect = nh_.advertise<sensor_msgs::PointCloud2>("/cloud_effected", 100000);
-  ros::Publisher pubLaserCloudMap = nh_.advertise<sensor_msgs::PointCloud2>("/Laser_map", 100000);
-  ros::Publisher pubOdomAftMapped = nh_.advertise<nav_msgs::Odometry>("/Odometry", 100000);
-  ros::Publisher pubPath = nh_.advertise<nav_msgs::Path>("/path", 100000);
+  //  ros::Publisher pubLaserCloudFull = nh_.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100000);
+  //  ros::Publisher pubLaserCloudFull_body = nh_.advertise<sensor_msgs::PointCloud2>("/cloud_registered_body", 100000);
+  //  ros::Publisher pubLaserCloudEffect = nh_.advertise<sensor_msgs::PointCloud2>("/cloud_effected", 100000);
+  //  ros::Publisher pubLaserCloudMap = nh_.advertise<sensor_msgs::PointCloud2>("/Laser_map", 100000);
+  //  ros::Publisher pubOdomAftMapped = nh_.advertise<nav_msgs::Odometry>("/Odometry", 100000);
+  //  ros::Publisher pubPath = nh_.advertise<nav_msgs::Path>("/path", 100000);
   //------------------------------------------------------------------------------------------------------
   ros::Rate rate(5000);
   bool status = ros::ok();
@@ -197,12 +208,12 @@ void LioMapping::run() {
                << state_point.offset_T_L_I.transpose() << " " << state_point.vel.transpose() << " "
                << state_point.bg.transpose() << " " << state_point.ba.transpose() << " " << state_point.grav << endl;
 
-      if (0)  // If you need to see map point, change to "if(1)"
       {
         PointVector().swap(ikdtree->PCL_Storage);
         ikdtree->flatten(ikdtree->Root_Node, ikdtree->PCL_Storage, NOT_RECORD);
         featsFromMap->clear();
         featsFromMap->points = ikdtree->PCL_Storage;
+        cloud_map_update.store(true);
       }
 
       pointSearchInd_surf.resize(feats_down_size);
@@ -235,16 +246,15 @@ void LioMapping::run() {
       t3 = omp_get_wtime();
       mapIncremental();
       t5 = omp_get_wtime();
-
-      /******* Publish points *******/
-      if (path_en) publishPath(pubPath);
-      if (scan_pub_en || pcd_save_en) {
-//        publishFrameWorld(pubLaserCloudFull);
-      }
-      if (scan_pub_en && scan_body_pub_en) {
-//        publishFrameBody(pubLaserCloudFull_body);
-      }
       cloud_update.store(true);
+      /******* Publish points *******/
+      //      if (path_en) publishPath(pubPath);
+      //      if (scan_pub_en || pcd_save_en) {
+      //        publishFrameWorld(pubLaserCloudFull);
+      //      }
+      //      if (scan_pub_en && scan_body_pub_en) {
+      //        publishFrameBody(pubLaserCloudFull_body);
+      //      }
       // publish_effect_world(pubLaserCloudEffect);
       // publish_map(pubLaserCloudMap);
 
@@ -416,23 +426,13 @@ inline void LioMapping::dumpLioStateToLog(FILE* fp) {
   fflush(fp);
 }
 
-void LioMapping::pointBodyToWorldIkfom(PointType const* const pi, PointType* const po, state_ikfom& s) {
-  V3D p_body(pi->x, pi->y, pi->z);
-  V3D p_global(s.rot * (s.offset_R_L_I * p_body + s.offset_T_L_I) + s.pos);
-
-  po->x = p_global(0);
-  po->y = p_global(1);
-  po->z = p_global(2);
-  po->intensity = pi->intensity;
-}
-
 void LioMapping::pointBodyToWorld(PointType const* const pi, PointType* const po) {
   V3D p_body(pi->x, pi->y, pi->z);
   V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
 
-  po->x = p_global(0);
-  po->y = p_global(1);
-  po->z = p_global(2);
+  po->x = static_cast<float>(p_global(0));
+  po->y = static_cast<float>(p_global(1));
+  po->z = static_cast<float>(p_global(2));
   po->intensity = pi->intensity;
 }
 
@@ -450,9 +450,9 @@ void LioMapping::rgbPointBodyToWorld(PointType const* const pi, PointType* const
   V3D p_body(pi->x, pi->y, pi->z);
   V3D p_global(state_point.rot * (state_point.offset_R_L_I * p_body + state_point.offset_T_L_I) + state_point.pos);
 
-  po->x = p_global(0);
-  po->y = p_global(1);
-  po->z = p_global(2);
+  po->x = static_cast<float>(p_global(0));
+  po->y = static_cast<float>(p_global(1));
+  po->z = static_cast<float>(p_global(2));
   po->intensity = pi->intensity;
 }
 
@@ -460,9 +460,9 @@ void LioMapping::rgbPointBodyLidarToIMU(PointType const* const pi, PointType* co
   V3D p_body_lidar(pi->x, pi->y, pi->z);
   V3D p_body_imu(state_point.offset_R_L_I * p_body_lidar + state_point.offset_T_L_I);
 
-  po->x = p_body_imu(0);
-  po->y = p_body_imu(1);
-  po->z = p_body_imu(2);
+  po->x = static_cast<float>(p_body_imu(0));
+  po->y = static_cast<float>(p_body_imu(1));
+  po->z = static_cast<float>(p_body_imu(2));
   po->intensity = pi->intensity;
 }
 
@@ -694,141 +694,6 @@ void LioMapping::mapIncremental() {
   ikdtree->Add_Points(PointNoNeedDownsample, false);
   add_point_size = PointToAdd.size() + PointNoNeedDownsample.size();
   kdtree_incremental_time = omp_get_wtime() - st_time;
-}
-
-void LioMapping::publishFrameWorld(const ros::Publisher& pubLaserCloudFull) {
-  if (scan_pub_en) {
-    PointCloudXYZI::Ptr laserCloudFullRes(dense_pub_en ? feats_undistort : feats_down_body);
-    int size = laserCloudFullRes->points.size();
-    PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
-
-    for (int i = 0; i < size; i++) {
-      rgbPointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudWorld->points[i]);
-    }
-
-    sensor_msgs::PointCloud2 laserCloudmsg;
-    pcl::toROSMsg(*laserCloudWorld, laserCloudmsg);
-    laserCloudmsg.header.stamp = ros::Time().fromSec(lidar_end_time);
-    laserCloudmsg.header.frame_id = "camera_init";
-    pubLaserCloudFull.publish(laserCloudmsg);
-    publish_count -= PUBFRAME_PERIOD_LIO;
-  }
-
-  /**************** save map ****************/
-  /* 1. make sure you have enough memories
-  /* 2. noted that pcd save will influence the real-time performences **/
-  if (pcd_save_en) {
-    int size = feats_undistort->points.size();
-    PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
-
-    for (int i = 0; i < size; i++) {
-      rgbPointBodyToWorld(&feats_undistort->points[i], &laserCloudWorld->points[i]);
-    }
-    *pcl_wait_save += *laserCloudWorld;
-
-    static int scan_wait_num = 0;
-    scan_wait_num++;
-    if (pcl_wait_save->size() > 0 && pcd_save_interval > 0 && scan_wait_num >= pcd_save_interval) {
-      pcd_index++;
-      string all_points_dir(string(string(ROOT_DIR) + "PCD/scans_") + to_string(pcd_index) + string(".pcd"));
-      pcl::PCDWriter pcd_writer;
-      LOG(INFO) << "current scan saved to /PCD/" << all_points_dir;
-      pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
-      pcl_wait_save->clear();
-      scan_wait_num = 0;
-    }
-  }
-}
-
-void LioMapping::publishFrameBody(const ros::Publisher& pubLaserCloudFull_body) {
-  int size = feats_undistort->points.size();
-  PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size, 1));
-
-  for (int i = 0; i < size; i++) {
-    rgbPointBodyLidarToIMU(&feats_undistort->points[i], &laserCloudIMUBody->points[i]);
-  }
-
-  sensor_msgs::PointCloud2 laserCloudmsg;
-  pcl::toROSMsg(*laserCloudIMUBody, laserCloudmsg);
-  laserCloudmsg.header.stamp = ros::Time().fromSec(lidar_end_time);
-  laserCloudmsg.header.frame_id = "body";
-  pubLaserCloudFull_body.publish(laserCloudmsg);
-  publish_count -= PUBFRAME_PERIOD_LIO;
-}
-
-void LioMapping::publishEffectWorld(const ros::Publisher& pubLaserCloudEffect) {
-  PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(effct_feat_num, 1));
-  for (int i = 0; i < effct_feat_num; i++) {
-    rgbPointBodyToWorld(&laserCloudOri->points[i], &laserCloudWorld->points[i]);
-  }
-  sensor_msgs::PointCloud2 laserCloudFullRes3;
-  pcl::toROSMsg(*laserCloudWorld, laserCloudFullRes3);
-  laserCloudFullRes3.header.stamp = ros::Time().fromSec(lidar_end_time);
-  laserCloudFullRes3.header.frame_id = "camera_init";
-  pubLaserCloudEffect.publish(laserCloudFullRes3);
-}
-
-void LioMapping::publishMap(const ros::Publisher& pubLaserCloudMap) {
-  sensor_msgs::PointCloud2 laserCloudMap;
-  pcl::toROSMsg(*featsFromMap, laserCloudMap);
-  laserCloudMap.header.stamp = ros::Time().fromSec(lidar_end_time);
-  laserCloudMap.header.frame_id = "camera_init";
-  pubLaserCloudMap.publish(laserCloudMap);
-}
-
-template <typename T>
-void LioMapping::setPosestamp(T& out) {
-  out.pose.position.x = state_point.pos(0);
-  out.pose.position.y = state_point.pos(1);
-  out.pose.position.z = state_point.pos(2);
-  out.pose.orientation.x = geoQuat.x;
-  out.pose.orientation.y = geoQuat.y;
-  out.pose.orientation.z = geoQuat.z;
-  out.pose.orientation.w = geoQuat.w;
-}
-
-void LioMapping::publishOdometry(const ros::Publisher& pubOdomAftMapped) {
-  odomAftMapped.header.frame_id = "camera_init";
-  odomAftMapped.child_frame_id = "body";
-  odomAftMapped.header.stamp = ros::Time().fromSec(lidar_end_time);  // ros::Time().fromSec(lidar_end_time);
-  setPosestamp(odomAftMapped.pose);
-  pubOdomAftMapped.publish(odomAftMapped);
-  auto P = kf.get_P();
-  for (int i = 0; i < 6; i++) {
-    int k = i < 3 ? i + 3 : i - 3;
-    odomAftMapped.pose.covariance[i * 6 + 0] = P(k, 3);
-    odomAftMapped.pose.covariance[i * 6 + 1] = P(k, 4);
-    odomAftMapped.pose.covariance[i * 6 + 2] = P(k, 5);
-    odomAftMapped.pose.covariance[i * 6 + 3] = P(k, 0);
-    odomAftMapped.pose.covariance[i * 6 + 4] = P(k, 1);
-    odomAftMapped.pose.covariance[i * 6 + 5] = P(k, 2);
-  }
-
-  static tf::TransformBroadcaster br;
-  tf::Transform transform;
-  tf::Quaternion q;
-  transform.setOrigin(tf::Vector3(
-      odomAftMapped.pose.pose.position.x, odomAftMapped.pose.pose.position.y, odomAftMapped.pose.pose.position.z));
-  q.setW(odomAftMapped.pose.pose.orientation.w);
-  q.setX(odomAftMapped.pose.pose.orientation.x);
-  q.setY(odomAftMapped.pose.pose.orientation.y);
-  q.setZ(odomAftMapped.pose.pose.orientation.z);
-  transform.setRotation(q);
-  br.sendTransform(tf::StampedTransform(transform, odomAftMapped.header.stamp, "camera_init", "body"));
-}
-
-void LioMapping::publishPath(const ros::Publisher pubPath) {
-  setPosestamp(msg_body_pose);
-  msg_body_pose.header.stamp = ros::Time().fromSec(lidar_end_time);
-  msg_body_pose.header.frame_id = "camera_init";
-
-  /*** if path is too large, the rviz will crash ***/
-  static int jjj = 0;
-  jjj++;
-  if (jjj % 10 == 0) {
-    path.poses.push_back(msg_body_pose);
-    pubPath.publish(path);
-  }
 }
 
 void LioMapping::hShareModel(state_ikfom& s, esekfom::dyn_share_datastruct<double>& ekfom_data) {

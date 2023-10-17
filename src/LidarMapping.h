@@ -37,7 +37,6 @@
 #define INIT_TIME_LIO (0.1)
 #define LASER_POINT_COV_LIO (0.001)
 #define MAXN_LIO (720000)
-#define PUBFRAME_PERIOD_LIO (20)
 
 class LioMapping {
  public:
@@ -52,14 +51,14 @@ class LioMapping {
 
   bool getPointCloud(CloudWithTime& cloud);
 
+  bool getCloudMap(CloudWithTime& cloud);
+
  private:
   void memoryInit();
 
   void rosParamInit();
 
   inline void dumpLioStateToLog(FILE* fp);
-
-  void pointBodyToWorldIkfom(PointType const* const pi, PointType* const po, state_ikfom& s);
 
   ///@brief 将点转为世界坐标系
   void pointBodyToWorld(PointType const* const pi, PointType* const po);
@@ -91,25 +90,6 @@ class LioMapping {
 
   ///@brief ikdtree增量地图
   void mapIncremental();
-
-  ///@brief 发布世界坐标系下的单帧点云
-  ///@note 已剥离
-  void publishFrameWorld(const ros::Publisher& pubLaserCloudFull);
-  ///@note 已剥离
-  void publishFrameBody(const ros::Publisher& pubLaserCloudFull_body);
-
-  void publishEffectWorld(const ros::Publisher& pubLaserCloudEffect);
-
-  void publishMap(const ros::Publisher& pubLaserCloudMap);
-
-  ///@brief 赋值世界坐标系下的imu位姿
-  template <typename T>
-  void setPosestamp(T& out);
-
-  ///@note 已剥离
-  void publishOdometry(const ros::Publisher& pubOdomAftMapped);
-
-  void publishPath(const ros::Publisher pubPath);
 
   void hShareModel(state_ikfom& s, esekfom::dyn_share_datastruct<double>& ekfom_data);
 
@@ -185,9 +165,7 @@ class LioMapping {
   state_ikfom state_point;
   vect3 pos_lid;
   nav_msgs::Path path;
-  nav_msgs::Odometry odomAftMapped;
   geometry_msgs::Quaternion geoQuat;  /// 世界坐标系下imu的姿态
-  geometry_msgs::PoseStamped msg_body_pose;
   shared_ptr<Preprocess> p_pre;
   shared_ptr<ImuProcess> p_imu;
 
@@ -205,6 +183,7 @@ class LioMapping {
   bool exit_flag = false;
   std::atomic<bool> odom_update{false};
   std::atomic<bool> cloud_update{false};
+  std::atomic<bool> cloud_map_update{false};
 };
 
 #endif  // FAST_LIO_LIDARMAPPING_H

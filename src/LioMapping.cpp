@@ -9,6 +9,7 @@ bool flg_exit = false;
 ros::Publisher pubOdomAftMapped;
 ros::Publisher pubLaserCloudFull;
 ros::Publisher pubLaserCloudFull_body;
+ros::Publisher pubLaserCloudMap;
 
 void SigHandle(int sig) {
   flg_exit = true;
@@ -59,6 +60,14 @@ void pubPointCloud(const CloudWithTime& cloud) {
     pubLaserCloudFull_body.publish(laserCloudmsg_b);
 }
 
+void pubCloudMap(CloudWithTime cloud) {
+  sensor_msgs::PointCloud2 laserCloudMap;
+  pcl::toROSMsg(*cloud.cloud_w, laserCloudMap);
+  laserCloudMap.header.stamp = ros::Time().fromSec(cloud.timestamp);
+  laserCloudMap.header.frame_id = "camera_init";
+  pubLaserCloudMap.publish(laserCloudMap);
+}
+
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, true);
@@ -70,6 +79,7 @@ int main(int argc, char** argv) {
   pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>("/Odometry", 100000);
   pubLaserCloudFull = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100000);
   pubLaserCloudFull_body = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered_body", 100000);
+  pubLaserCloudMap = nh.advertise<sensor_msgs::PointCloud2>("/Laser_map", 100000);
 
   LioMapping lio_mapping(nh);
   std::thread lio_run = std::thread([&]() { lio_mapping.run(); });
@@ -82,13 +92,21 @@ int main(int argc, char** argv) {
       break;
     }
     PoseWithTime pose;
+    /// 获取位姿
     if (lio_mapping.getOdom(pose)) {
       pubOdometry(pose);
     }
+    /// 获取实时点云
     CloudWithTime cloud;
     if (lio_mapping.getPointCloud(cloud)) {
       pubPointCloud(cloud);
       cloud.cloud_b.reset(new PointCloudXYZI);
+      cloud.cloud_w.reset(new PointCloudXYZI);
+    }
+    /// 获取全局点云
+    CloudWithTime cloud_map;
+    if (lio_mapping.getCloudMap(cloud_map)) {
+      pubCloudMap(cloud_map);
       cloud.cloud_w.reset(new PointCloudXYZI);
     }
   }
