@@ -47,6 +47,15 @@ class LioMapping {
     sig_buffer.notify_all();
   }
 
+  ///@brief ros msg回调函数
+  void standardPclCbk(const sensor_msgs::PointCloud2::ConstPtr& msg);
+
+  ///@brief livox msg回调函数
+  void livoxPclCbk(const fast_lio::CustomMsg::ConstPtr& msg);
+
+  ///@brief imu回调函数
+  void imuCbk(const sensor_msgs::Imu::ConstPtr& msg_in);
+
   bool getOdom(PoseWithTime& pose);
 
   bool getPointCloud(CloudWithTime& cloud);
@@ -75,15 +84,6 @@ class LioMapping {
   void pointsCacheCollect();
 
   void lasermapFovSegment();
-
-  ///@brief ros msg回调函数
-  void standardPclCbk(const sensor_msgs::PointCloud2::ConstPtr& msg);
-
-  ///@brief livox msg回调函数
-  void livoxPclCbk(const fast_lio::CustomMsg::ConstPtr& msg);
-
-  ///@brief imu回调函数
-  void imuCbk(const sensor_msgs::Imu::ConstPtr& msg_in);
 
   ///@brief msg的时间同步
   bool syncPackages(MeasureGroup& meas);
@@ -151,7 +151,6 @@ class LioMapping {
   PointCloudXYZI::Ptr _featsArray;
   pcl::VoxelGrid<PointType> downSizeFilterSurf;
   pcl::VoxelGrid<PointType> downSizeFilterMap;
-  // KD_TREE<PointType> ikdtree;
   std::shared_ptr<KD_TREE<PointType>> ikdtree;
   V3F XAxisPoint_body = V3F(LIDAR_SP_LEN, 0.0, 0.0);
   V3F XAxisPoint_world = V3F(LIDAR_SP_LEN, 0.0, 0.0);

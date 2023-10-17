@@ -6,6 +6,8 @@
 
 #include "LidarMapping.h"
 bool flg_exit = false;
+ros::Subscriber sub_pcl;
+ros::Subscriber sub_imu;
 ros::Publisher pubOdomAftMapped;
 ros::Publisher pubLaserCloudFull;
 ros::Publisher pubLaserCloudFull_body;
@@ -48,16 +50,16 @@ void pubOdometry(const PoseWithTime& pose) {
 }
 
 void pubPointCloud(const CloudWithTime& cloud) {
-    sensor_msgs::PointCloud2 laserCloudmsg_w;
-    pcl::toROSMsg(*cloud.cloud_w, laserCloudmsg_w);
-    laserCloudmsg_w.header.stamp = ros::Time().fromSec(cloud.timestamp);
-    laserCloudmsg_w.header.frame_id = "camera_init";
-    pubLaserCloudFull.publish(laserCloudmsg_w);
-    sensor_msgs::PointCloud2 laserCloudmsg_b;
-    pcl::toROSMsg(*cloud.cloud_b, laserCloudmsg_b);
-    laserCloudmsg_b.header.stamp = ros::Time().fromSec(cloud.timestamp);
-    laserCloudmsg_b.header.frame_id = "body";
-    pubLaserCloudFull_body.publish(laserCloudmsg_b);
+  sensor_msgs::PointCloud2 laserCloudmsg_w;
+  pcl::toROSMsg(*cloud.cloud_w, laserCloudmsg_w);
+  laserCloudmsg_w.header.stamp = ros::Time().fromSec(cloud.timestamp);
+  laserCloudmsg_w.header.frame_id = "camera_init";
+  pubLaserCloudFull.publish(laserCloudmsg_w);
+  sensor_msgs::PointCloud2 laserCloudmsg_b;
+  pcl::toROSMsg(*cloud.cloud_b, laserCloudmsg_b);
+  laserCloudmsg_b.header.stamp = ros::Time().fromSec(cloud.timestamp);
+  laserCloudmsg_b.header.frame_id = "body";
+  pubLaserCloudFull_body.publish(laserCloudmsg_b);
 }
 
 void pubCloudMap(CloudWithTime cloud) {
@@ -76,17 +78,32 @@ int main(int argc, char** argv) {
 
   ros::init(argc, argv, "laserMapping");
   ros::NodeHandle nh;
+  LioMapping lio_mapping(nh);
+  int lidar_type;
+  std::string lid_topic, imu_topic;
+  nh.param<int>("preprocess/lidar_type", lidar_type, AVIA);
+  nh.param<string>("common/lid_topic", lid_topic, "/livox/lidar");
+  nh.param<string>("common/imu_topic", imu_topic, "/livox/imu");
+  sub_pcl =
+      lidar_type == AVIA
+          ? nh.subscribe<fast_lio::CustomMsg>(
+                lid_topic, 200000, [&](const fast_lio::CustomMsg::ConstPtr& msg) { lio_mapping.livoxPclCbk(msg); })
+          : nh.subscribe<sensor_msgs::PointCloud2>(
+                lid_topic, 200000, [&](const sensor_msgs::PointCloud2::ConstPtr& msg) {
+                  lio_mapping.standardPclCbk(msg);
+                });
+  sub_imu = nh.subscribe<sensor_msgs::Imu>(
+      imu_topic, 200000, [&](const sensor_msgs::Imu::ConstPtr& msg) { lio_mapping.imuCbk(msg); });
   pubOdomAftMapped = nh.advertise<nav_msgs::Odometry>("/Odometry", 100000);
   pubLaserCloudFull = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100000);
   pubLaserCloudFull_body = nh.advertise<sensor_msgs::PointCloud2>("/cloud_registered_body", 100000);
   pubLaserCloudMap = nh.advertise<sensor_msgs::PointCloud2>("/Laser_map", 100000);
 
-  LioMapping lio_mapping(nh);
   std::thread lio_run = std::thread([&]() { lio_mapping.run(); });
 
   signal(SIGINT, SigHandle);
-  ros::Rate rate(20);
   while (ros::ok()) {
+    ros::spinOnce();
     if (flg_exit) {
       lio_mapping.exit();
       break;

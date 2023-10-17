@@ -117,31 +117,10 @@ void LioMapping::run() {
     LOG(INFO) << "~~~~" << ROOT_DIR << " file opened";
   else
     LOG(INFO) << "~~~~" << ROOT_DIR << " doesn't exist";
-
-  /*** ROS subscribe initialization ***/
-  ros::Subscriber sub_pcl =
-      p_pre->lidar_type == AVIA
-          ? nh_.subscribe<fast_lio::CustomMsg>(
-                lid_topic, 200000, [this](const fast_lio::CustomMsg::ConstPtr& msg) { livoxPclCbk(msg); })
-          : nh_.subscribe<sensor_msgs::PointCloud2>(
-                lid_topic, 200000, [this](const sensor_msgs::PointCloud2::ConstPtr& msg) { standardPclCbk(msg); });
-  ros::Subscriber sub_imu = nh_.subscribe<sensor_msgs::Imu>(
-      imu_topic, 200000, [this](const sensor_msgs::Imu::ConstPtr& msg) { imuCbk(msg); });
-  //  ros::Publisher pubLaserCloudFull = nh_.advertise<sensor_msgs::PointCloud2>("/cloud_registered", 100000);
-  //  ros::Publisher pubLaserCloudFull_body = nh_.advertise<sensor_msgs::PointCloud2>("/cloud_registered_body", 100000);
-  //  ros::Publisher pubLaserCloudEffect = nh_.advertise<sensor_msgs::PointCloud2>("/cloud_effected", 100000);
-  //  ros::Publisher pubLaserCloudMap = nh_.advertise<sensor_msgs::PointCloud2>("/Laser_map", 100000);
-  //  ros::Publisher pubOdomAftMapped = nh_.advertise<nav_msgs::Odometry>("/Odometry", 100000);
-  //  ros::Publisher pubPath = nh_.advertise<nav_msgs::Path>("/path", 100000);
-  //------------------------------------------------------------------------------------------------------
-  ros::Rate rate(5000);
-  bool status = ros::ok();
-
   ///--------------------------------------------------------
 
-  while (status) {
+  while (!exit_flag) {
     if (exit_flag) break;
-    ros::spinOnce();
     /// measures为一帧lidar和多帧imu
     if (syncPackages(Measures)) {
       /// 首帧初始化
@@ -247,16 +226,6 @@ void LioMapping::run() {
       mapIncremental();
       t5 = omp_get_wtime();
       cloud_update.store(true);
-      /******* Publish points *******/
-      //      if (path_en) publishPath(pubPath);
-      //      if (scan_pub_en || pcd_save_en) {
-      //        publishFrameWorld(pubLaserCloudFull);
-      //      }
-      //      if (scan_pub_en && scan_body_pub_en) {
-      //        publishFrameBody(pubLaserCloudFull_body);
-      //      }
-      // publish_effect_world(pubLaserCloudEffect);
-      // publish_map(pubLaserCloudMap);
 
       /*** Debug variables ***/
       if (runtime_pos_log) {
@@ -300,9 +269,7 @@ void LioMapping::run() {
         dumpLioStateToLog(fp);
       }
     }
-
-    status = ros::ok();
-    rate.sleep();
+    usleep(200);
   }
 
   /**************** save map ****************/
@@ -378,8 +345,6 @@ void LioMapping::rosParamInit() {
   nh_.param<bool>("publish/scan_bodyframe_pub_en", scan_body_pub_en, true);
   nh_.param<int>("max_iteration", NUM_MAX_ITERATIONS, 4);
   nh_.param<string>("map_file_path", map_file_path, "");
-  nh_.param<string>("common/lid_topic", lid_topic, "/livox/lidar");
-  nh_.param<string>("common/imu_topic", imu_topic, "/livox/imu");
   nh_.param<bool>("common/time_sync_en", time_sync_en, false);
   nh_.param<double>("common/time_offset_lidar_to_imu", time_diff_lidar_to_imu, 0.0);
   nh_.param<double>("filter_size_corner", filter_size_corner_min, 0.5);
