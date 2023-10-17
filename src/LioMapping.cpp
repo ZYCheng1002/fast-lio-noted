@@ -5,6 +5,7 @@
 #include <glog/logging.h>
 
 #include "LidarMapping.h"
+#include "timer/timer.h"
 bool flg_exit = false;
 ros::Subscriber sub_pcl;
 ros::Subscriber sub_imu;
@@ -158,6 +159,6 @@ int main(int argc, char** argv) {
       cloud.cloud_w.reset(new PointCloudXYZI);
     }
   }
-
+  Timer::PrintAll();
   return 0;
 }

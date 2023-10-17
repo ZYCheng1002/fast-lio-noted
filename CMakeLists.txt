@@ -86,6 +86,10 @@ catkin_package(
         DEPENDS EIGEN3 PCL
         INCLUDE_DIRS
 )
+add_library(${PROJECT_NAME}_timer src/timer/timer.cpp)
+add_library(${PROJECT_NAME}_ikd_tree src/ikd-Tree/ikd_Tree.cpp)
+add_library(${PROJECT_NAME}_preprocess src/preprocess.cpp)
+add_library(${PROJECT_NAME}_lio src/LidarMapping.cpp)
 
 add_library(${PROJECT_NAME}_ikd_tree src/ikd-Tree/ikd_Tree.cpp)
 add_library(${PROJECT_NAME}_preprocess src/preprocess.cpp)

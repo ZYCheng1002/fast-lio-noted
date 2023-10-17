@@ -3,6 +3,8 @@
 //
 #include "LidarMapping.h"
 
+#include "timer/timer.h"
+
 bool LioMapping::getOdom(PoseWithTime& pose) {
   if (!odom_update.load()) {
     return false;
@@ -75,7 +77,7 @@ void LioMapping::run() {
   double deltaT, deltaR, aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0, aver_time_incre = 0,
                          aver_time_solve = 0, aver_time_const_H_time = 0;
   bool flg_EKF_converged, EKF_stop_flg = false;
-
+  double run_time = 0;
   FOV_DEG = (fov_deg + 10.0) > 179.9 ? 179.9 : (fov_deg + 10.0);
   HALF_FOV_COS = cos((FOV_DEG)*0.5 * PI_M / 180.0);
   _featsArray.reset(new PointCloudXYZI());
@@ -123,6 +125,7 @@ void LioMapping::run() {
     if (exit_flag) break;
     /// measures为一帧lidar和多帧imu
     if (syncPackages(Measures)) {
+      auto t1_start = std::chrono::steady_clock::now();
       /// 首帧初始化
       if (flg_first_scan) {
         first_lidar_time = Measures.lidar_beg_time;
@@ -140,7 +143,7 @@ void LioMapping::run() {
       svd_time = 0;
       t0 = omp_get_wtime();
       /// imu 前向传播(predict),点云运动补偿
-      p_imu->Process(Measures, kf, feats_undistort);
+      Timer::Evaluate([&]() { p_imu->Process(Measures, kf, feats_undistort); }, "imu process");
       state_point = kf.get_x();  /// 获取状态量
       pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
 
@@ -151,8 +154,7 @@ void LioMapping::run() {
       /// 通过时间判断是否完成初始化
       flg_EKF_inited = (Measures.lidar_beg_time - first_lidar_time) < INIT_TIME_LIO ? false : true;
       /// 根据lidar pose获取周围box信息
-      lasermapFovSegment();
-
+      Timer::Evaluate([&]() { lasermapFovSegment(); }, "laser map Fov Segment");
       downSizeFilterSurf.setInputCloud(feats_undistort);
       downSizeFilterSurf.filter(*feats_down_body);
       t1 = omp_get_wtime();
@@ -189,7 +191,8 @@ void LioMapping::run() {
 
       {
         PointVector().swap(ikdtree->PCL_Storage);
-        ikdtree->flatten(ikdtree->Root_Node, ikdtree->PCL_Storage, NOT_RECORD);
+        Timer::Evaluate([&]() { ikdtree->flatten(ikdtree->Root_Node, ikdtree->PCL_Storage, NOT_RECORD); },
+                        "ikdtree flatten");
         featsFromMap->clear();
         featsFromMap->points = ikdtree->PCL_Storage;
         cloud_map_update.store(true);
@@ -206,7 +209,8 @@ void LioMapping::run() {
       double t_update_start = omp_get_wtime();
       double solve_H_time = 0;
       /// 滤波器更新
-      kf.update_iterated_dyn_share_modified(LASER_POINT_COV_LIO, solve_H_time);
+      Timer::Evaluate([&]() { kf.update_iterated_dyn_share_modified(LASER_POINT_COV_LIO, solve_H_time); },
+                      "update iterated dyn");
       /// 完成一轮更新,获取状态量
       state_point = kf.get_x();
       euler_cur = SO3ToEuler(state_point.rot);
@@ -219,11 +223,10 @@ void LioMapping::run() {
       double t_update_end = omp_get_wtime();
 
       /// 发布里程计信息
-      /// publishOdometry(pubOdomAftMapped);
       odom_update.store(true);
       /*** add the feature points to map kdtree ***/
       t3 = omp_get_wtime();
-      mapIncremental();
+      Timer::Evaluate([&]() { mapIncremental(); }, "map incremental");
       t5 = omp_get_wtime();
       cloud_update.store(true);
 
@@ -268,8 +271,12 @@ void LioMapping::run() {
                  << feats_undistort->points.size() << endl;
         dumpLioStateToLog(fp);
       }
+      auto t2_end = std::chrono::steady_clock::now();
+      auto time_used = std::chrono::duration_cast<std::chrono::duration<double>>(t2_end - t1_start).count() * 1000;
+      run_time += time_used;
     }
   }
+  LOG(ERROR) << "run time: " << run_time / frame_num;
 
   /**************** save map ****************/
   /* 1. make sure you have enough memories
