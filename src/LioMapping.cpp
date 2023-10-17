@@ -78,14 +78,45 @@ int main(int argc, char** argv) {
 
   ros::init(argc, argv, "laserMapping");
   ros::NodeHandle nh;
-  LioMapping lio_mapping(nh);
-  int lidar_type;
+  LioParam lio_param;
   std::string lid_topic, imu_topic;
-  nh.param<int>("preprocess/lidar_type", lidar_type, AVIA);
+  nh.param<bool>("publish/path_en", lio_param.path_en, true);
+  nh.param<bool>("publish/scan_publish_en", lio_param.scan_pub_en, true);
+  nh.param<bool>("publish/dense_publish_en", lio_param.dense_pub_en, true);
+  nh.param<bool>("publish/scan_bodyframe_pub_en", lio_param.scan_body_pub_en, true);
+  nh.param<int>("max_iteration", lio_param.NUM_MAX_ITERATIONS, 4);
+  nh.param<string>("map_file_path", lio_param.map_file_path, "");
   nh.param<string>("common/lid_topic", lid_topic, "/livox/lidar");
   nh.param<string>("common/imu_topic", imu_topic, "/livox/imu");
+  nh.param<bool>("common/time_sync_en", lio_param.time_sync_en, false);
+  nh.param<double>("common/time_offset_lidar_to_imu", lio_param.time_diff_lidar_to_imu, 0.0);
+  nh.param<double>("filter_size_corner", lio_param.filter_size_corner_min, 0.5);
+  nh.param<double>("filter_size_surf", lio_param.filter_size_surf_min, 0.5);
+  nh.param<double>("filter_size_map", lio_param.filter_size_map_min, 0.5);
+  nh.param<double>("cube_side_length", lio_param.cube_len, 200);
+  nh.param<float>("mapping/det_range", lio_param.DET_RANGE, 300.f);
+  nh.param<double>("mapping/fov_degree", lio_param.fov_deg, 180);
+  nh.param<double>("mapping/gyr_cov", lio_param.gyr_cov, 0.1);
+  nh.param<double>("mapping/acc_cov", lio_param.acc_cov, 0.1);
+  nh.param<double>("mapping/b_gyr_cov", lio_param.b_gyr_cov, 0.0001);
+  nh.param<double>("mapping/b_acc_cov", lio_param.b_acc_cov, 0.0001);
+  nh.param<double>("preprocess/blind", lio_param.blind, 0.01);
+  nh.param<int>("preprocess/lidar_type", lio_param.lidar_type, AVIA);
+  nh.param<int>("preprocess/scan_line", lio_param.N_SCANS, 16);
+  nh.param<int>("preprocess/timestamp_unit", lio_param.time_unit, US);
+  nh.param<int>("preprocess/scan_rate", lio_param.SCAN_RATE, 10);
+  nh.param<int>("point_filter_num", lio_param.point_filter_num, 2);
+  nh.param<bool>("feature_extract_enable", lio_param.feature_enabled, false);
+  nh.param<bool>("runtime_pos_log_enable", lio_param.runtime_pos_log, false);
+  nh.param<bool>("mapping/extrinsic_est_en", lio_param.extrinsic_est_en, true);
+  nh.param<bool>("pcd_save/pcd_save_en", lio_param.pcd_save_en, false);
+  nh.param<int>("pcd_save/interval", lio_param.pcd_save_interval, -1);
+  nh.param<vector<double>>("mapping/extrinsic_T", lio_param.extrinT, vector<double>());
+  nh.param<vector<double>>("mapping/extrinsic_R", lio_param.extrinR, vector<double>());
+  LOG(INFO) << "p_pre->lidar_type " << lio_param.lidar_type;
+  LioMapping lio_mapping(lio_param);
   sub_pcl =
-      lidar_type == AVIA
+      lio_param.lidar_type == AVIA
           ? nh.subscribe<fast_lio::CustomMsg>(
                 lid_topic, 200000, [&](const fast_lio::CustomMsg::ConstPtr& msg) { lio_mapping.livoxPclCbk(msg); })
           : nh.subscribe<sensor_msgs::PointCloud2>(

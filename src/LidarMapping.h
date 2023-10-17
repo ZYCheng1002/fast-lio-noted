@@ -31,6 +31,7 @@
 #include <thread>
 
 #include "IMU_Processing.hpp"
+#include "LioParam.h"
 #include "ikd-Tree/ikd_Tree.h"
 #include "preprocess.h"
 
@@ -40,7 +41,7 @@
 
 class LioMapping {
  public:
-  LioMapping(const ros::NodeHandle& nh) { nh_ = nh; }
+  LioMapping(const LioParam& param) { lio_param = param; }
   void run();
   void exit() {
     exit_flag = true;
@@ -94,8 +95,6 @@ class LioMapping {
   void hShareModel(state_ikfom& s, esekfom::dyn_share_datastruct<double>& ekfom_data);
 
  private:
-  ros::NodeHandle nh_;
-
   /*** Time Log Variables ***/
   double kdtree_incremental_time = 0.0, kdtree_search_time = 0.0, kdtree_delete_time = 0.0;
   std::vector<double> T1 = std::vector<double>(MAXN_LIO, 0.0);
@@ -177,6 +176,7 @@ class LioMapping {
   double timediff_lidar_wrt_imu = 0.0;
   bool timediff_set_flg = false;
 
+  LioParam lio_param;
   double lidar_mean_scantime = 0.0;
   int scan_num = 0;
   bool exit_flag = false;

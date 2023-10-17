@@ -174,7 +174,7 @@ void LioMapping::run() {
 
       /*** ICP and iterated Kalman filter update ***/
       if (feats_down_size < 5) {
-        ROS_WARN("No point, skip this scan!\n");
+        LOG(WARNING) << "No point, skip this scan!";
         continue;
       }
 
@@ -269,7 +269,6 @@ void LioMapping::run() {
         dumpLioStateToLog(fp);
       }
     }
-    usleep(200);
   }
 
   /**************** save map ****************/
@@ -339,41 +338,38 @@ void LioMapping::memoryInit() {
 }
 
 void LioMapping::rosParamInit() {
-  nh_.param<bool>("publish/path_en", path_en, true);
-  nh_.param<bool>("publish/scan_publish_en", scan_pub_en, true);
-  nh_.param<bool>("publish/dense_publish_en", dense_pub_en, true);
-  nh_.param<bool>("publish/scan_bodyframe_pub_en", scan_body_pub_en, true);
-  nh_.param<int>("max_iteration", NUM_MAX_ITERATIONS, 4);
-  nh_.param<string>("map_file_path", map_file_path, "");
-  nh_.param<bool>("common/time_sync_en", time_sync_en, false);
-  nh_.param<double>("common/time_offset_lidar_to_imu", time_diff_lidar_to_imu, 0.0);
-  nh_.param<double>("filter_size_corner", filter_size_corner_min, 0.5);
-  nh_.param<double>("filter_size_surf", filter_size_surf_min, 0.5);
-  nh_.param<double>("filter_size_map", filter_size_map_min, 0.5);
-  nh_.param<double>("cube_side_length", cube_len, 200);
-  nh_.param<float>("mapping/det_range", DET_RANGE, 300.f);
-  nh_.param<double>("mapping/fov_degree", fov_deg, 180);
-  nh_.param<double>("mapping/gyr_cov", gyr_cov, 0.1);
-  nh_.param<double>("mapping/acc_cov", acc_cov, 0.1);
-  nh_.param<double>("mapping/b_gyr_cov", b_gyr_cov, 0.0001);
-  nh_.param<double>("mapping/b_acc_cov", b_acc_cov, 0.0001);
-  nh_.param<double>("preprocess/blind", p_pre->blind, 0.01);
-  nh_.param<int>("preprocess/lidar_type", p_pre->lidar_type, AVIA);
-  nh_.param<int>("preprocess/scan_line", p_pre->N_SCANS, 16);
-  nh_.param<int>("preprocess/timestamp_unit", p_pre->time_unit, US);
-  nh_.param<int>("preprocess/scan_rate", p_pre->SCAN_RATE, 10);
-  nh_.param<int>("point_filter_num", p_pre->point_filter_num, 2);
-  nh_.param<bool>("feature_extract_enable", p_pre->feature_enabled, false);
-  nh_.param<bool>("runtime_pos_log_enable", runtime_pos_log, false);
-  nh_.param<bool>("mapping/extrinsic_est_en", extrinsic_est_en, true);
-  nh_.param<bool>("pcd_save/pcd_save_en", pcd_save_en, false);
-  nh_.param<int>("pcd_save/interval", pcd_save_interval, -1);
-  nh_.param<vector<double>>("mapping/extrinsic_T", extrinT, vector<double>());
-  nh_.param<vector<double>>("mapping/extrinsic_R", extrinR, vector<double>());
-  LOG(INFO) << "p_pre->lidar_type " << p_pre->lidar_type;
-
-  path.header.stamp = ros::Time::now();
-  path.header.frame_id = "camera_init";
+  /// todo 直接使用param而不进行转换
+  path_en = lio_param.path_en;
+  scan_pub_en = lio_param.scan_pub_en;
+  dense_pub_en = lio_param.dense_pub_en;
+  scan_body_pub_en = lio_param.scan_body_pub_en;
+  NUM_MAX_ITERATIONS = lio_param.NUM_MAX_ITERATIONS;
+  map_file_path = lio_param.map_file_path;
+  time_sync_en = lio_param.time_sync_en;
+  time_diff_lidar_to_imu = lio_param.time_diff_lidar_to_imu;
+  filter_size_corner_min = lio_param.filter_size_corner_min;
+  filter_size_surf_min = lio_param.filter_size_surf_min;
+  filter_size_map_min = lio_param.filter_size_map_min;
+  cube_len = lio_param.cube_len;
+  DET_RANGE = lio_param.DET_RANGE;
+  fov_deg = lio_param.fov_deg;
+  gyr_cov = lio_param.gyr_cov;
+  acc_cov = lio_param.acc_cov;
+  b_gyr_cov = lio_param.b_gyr_cov;
+  b_acc_cov = lio_param.b_acc_cov;
+  p_pre->blind = lio_param.blind;
+  p_pre->lidar_type = lio_param.lidar_type;
+  p_pre->N_SCANS = lio_param.N_SCANS;
+  p_pre->time_unit = lio_param.time_unit;
+  p_pre->SCAN_RATE = lio_param.SCAN_RATE;
+  p_pre->point_filter_num = lio_param.point_filter_num;
+  p_pre->feature_enabled = lio_param.feature_enabled;
+  runtime_pos_log = lio_param.runtime_pos_log;
+  extrinsic_est_en = lio_param.extrinsic_est_en;
+  pcd_save_en = lio_param.pcd_save_en;
+  pcd_save_interval = lio_param.pcd_save_interval;
+  extrinT = lio_param.extrinT;
+  extrinR = lio_param.extrinR;
 }
 
 inline void LioMapping::dumpLioStateToLog(FILE* fp) {
@@ -496,7 +492,7 @@ void LioMapping::standardPclCbk(const sensor_msgs::PointCloud2::ConstPtr& msg) {
   scan_count++;
   double preprocess_start_time = omp_get_wtime();
   if (msg->header.stamp.toSec() < last_timestamp_lidar) {
-    ROS_ERROR("lidar loop back, clear buffer");
+    LOG(ERROR) << "lidar loop back, clear buffer";
     lidar_buffer.clear();
   }
 
@@ -580,7 +576,7 @@ bool LioMapping::syncPackages(MeasureGroup& meas) {
     meas.lidar_beg_time = time_buffer.front();
     if (meas.lidar->points.size() <= 1) {  /// 点数太少
       lidar_end_time = meas.lidar_beg_time + lidar_mean_scantime;
-      ROS_WARN("Too few input point cloud!\n");
+      LOG(WARNING) << "Too few input point cloud!";
     } else if (meas.lidar->points.back().curvature / double(1000) < 0.5 * lidar_mean_scantime) {
       lidar_end_time = meas.lidar_beg_time + lidar_mean_scantime;
     } else {

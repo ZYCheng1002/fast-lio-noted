@@ -3,18 +3,14 @@
 #include <ros/ros.h>
 #include <sensor_msgs/PointCloud2.h>
 
+#include "common_lib.h"
+
 using namespace std;
 
 #define IS_VALID(a) ((abs(a) > 1e8) ? true : false)
 
 typedef pcl::PointXYZINormal PointType;
 typedef pcl::PointCloud<PointType> PointCloudXYZI;
-
-enum LID_TYPE { AVIA = 1, VELO16, OUST64 };                                            /// 激光雷达类型
-enum TIME_UNIT { SEC = 0, MS = 1, US = 2, NS = 3 };                                    /// 时间戳类型
-enum Feature { Nor, Poss_Plane, Real_Plane, Edge_Jump, Edge_Plane, Wire, ZeroPoint };  /// 特征点类型
-enum Surround { Prev, Next };
-enum E_jump { Nr_nor, Nr_zero, Nr_180, Nr_inf, Nr_blind };
 
 struct orgtype {
   double range;
@@ -102,8 +98,8 @@ class Preprocess {
 
   // sensor_msgs::PointCloud2::ConstPtr pointcloud;
   PointCloudXYZI pl_full, pl_corn, pl_surf;  /// 所有点云,角点,平面点
-  PointCloudXYZI pl_buff[128];  // maximum 128 line lidar
-  vector<orgtype> typess[128];  // maximum 128 line lidar
+  PointCloudXYZI pl_buff[128];               // maximum 128 line lidar
+  vector<orgtype> typess[128];               // maximum 128 line lidar
   float time_unit_scale;
   int lidar_type, point_filter_num, N_SCANS, SCAN_RATE, time_unit;  /// N_SCANS:线束; point_filter_num:均值采样
   double blind;

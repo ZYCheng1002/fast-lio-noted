@@ -4,6 +4,8 @@
 #define RETURN0AND1 0x10
 
 Preprocess::Preprocess() : feature_enabled(0), lidar_type(AVIA), blind(0.01), point_filter_num(1) {
+  /// 设置pcl的警告级别,主要为了消除toRosMsg过程遇到的field不匹配问题
+  pcl::console::setVerbosityLevel(pcl::console::L_ERROR);
   inf_bound = 10;
   N_SCANS = 6;
   SCAN_RATE = 10;

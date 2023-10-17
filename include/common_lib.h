@@ -53,6 +53,12 @@ M3F Eye3f(M3F::Identity());
 V3D Zero3d(0, 0, 0);
 V3F Zero3f(0, 0, 0);
 
+enum LID_TYPE { AVIA = 1, VELO16, OUST64 };                                            /// 激光雷达类型
+enum TIME_UNIT { SEC = 0, MS = 1, US = 2, NS = 3 };                                    /// 时间戳类型
+enum Feature { Nor, Poss_Plane, Real_Plane, Edge_Jump, Edge_Plane, Wire, ZeroPoint };  /// 特征点类型
+enum Surround { Prev, Next };
+enum E_jump { Nr_nor, Nr_zero, Nr_180, Nr_inf, Nr_blind };
+
 struct MeasureGroup  // Lidar data and imu dates for the curent process
 {
   MeasureGroup() {
