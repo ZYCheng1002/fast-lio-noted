@@ -100,3 +100,6 @@ target_link_libraries(lio_mapping
         ${PROJECT_NAME}_preprocess
         ${PROJECT_NAME}_timer
         )
+
+add_executable(fastlio_mapping src/laserMapping.cpp src/ikd-Tree/ikd_Tree.cpp src/preprocess.cpp)
+target_link_libraries(fastlio_mapping         ${catkin_LIBRARIES} ${third_party} )

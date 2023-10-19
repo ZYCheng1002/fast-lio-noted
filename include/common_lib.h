@@ -49,10 +49,10 @@ typedef Matrix<double, 9, 1> V9D;
 #define MF(a, b) Matrix<float, (a), (b)>
 #define VF(a) Matrix<float, (a), 1>
 
-M3D Eye3d(M3D::Identity());
-M3F Eye3f(M3F::Identity());
-V3D Zero3d(0, 0, 0);
-V3F Zero3f(0, 0, 0);
+static M3D Eye3d(M3D::Identity());
+static M3F Eye3f(M3F::Identity());
+static V3D Zero3d(0, 0, 0);
+static V3F Zero3f(0, 0, 0);
 
 enum LID_TYPE { AVIA = 1, VELO16, OUST64 };                                            /// 激光雷达类型
 enum TIME_UNIT { SEC = 0, MS = 1, US = 2, NS = 3 };                                    /// 时间戳类型
@@ -245,7 +245,7 @@ bool esti_normvector(Matrix<T, 3, 1>& normvec, const PointVector& point, const T
   return true;
 }
 
-float calc_dist(PointType p1, PointType p2) {
+static float calc_dist(PointType p1, PointType p2) {
   float d = (p1.x - p2.x) * (p1.x - p2.x) + (p1.y - p2.y) * (p1.y - p2.y) + (p1.z - p2.z) * (p1.z - p2.z);
   return d;
 }

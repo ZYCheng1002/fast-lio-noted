@@ -1,3 +1,5 @@
+#ifndef PREPROCESS_H
+#define PREPROCESS_H
 #include <fast_lio/CustomMsg.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <ros/ros.h>
@@ -134,3 +136,5 @@ class Preprocess {
   double smallp_intersect, smallp_ratio;
   double vx, vy, vz;
 };
+
+#endif
