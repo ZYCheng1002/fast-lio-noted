@@ -42,6 +42,7 @@ typedef Vector3d V3D;
 typedef Matrix3d M3D;
 typedef Vector3f V3F;
 typedef Matrix3f M3F;
+typedef Matrix<double, 9, 1> V9D;
 
 #define MD(a, b) Matrix<double, (a), (b)>
 #define VD(a) Matrix<double, (a), 1>
@@ -59,6 +60,24 @@ enum Feature { Nor, Poss_Plane, Real_Plane, Edge_Jump, Edge_Plane, Wire, ZeroPoi
 enum Surround { Prev, Next };
 enum E_jump { Nr_nor, Nr_zero, Nr_180, Nr_inf, Nr_blind };
 
+struct Imu {
+  EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+  Imu() = default;
+  Imu(const double& time, const V3D& angular, const V3D& linear) {
+    time_stamp = time;
+    angular_velocity = angular;
+    linear_acceleration = linear;
+  }
+  double time_stamp;
+  V3D angular_velocity;
+  V9D angular_velocity_covariance;
+  V3D linear_acceleration;
+  V9D linear_acceleration_covariance;
+
+  typedef std::shared_ptr<Imu> Ptr;
+  typedef std::shared_ptr<Imu const> ConstPtr;
+};
+
 struct MeasureGroup  // Lidar data and imu dates for the curent process
 {
   MeasureGroup() {
@@ -69,6 +88,18 @@ struct MeasureGroup  // Lidar data and imu dates for the curent process
   double lidar_end_time;
   PointCloudXYZI::Ptr lidar;
   deque<sensor_msgs::Imu::ConstPtr> imu;
+};
+
+struct MeasureGroup_  // Lidar data and imu dates for the curent process
+{
+  MeasureGroup_() {
+    lidar_beg_time = 0.0;
+    this->lidar.reset(new PointCloudXYZI());
+  };
+  double lidar_beg_time;
+  double lidar_end_time;
+  PointCloudXYZI::Ptr lidar;
+  deque<Imu::ConstPtr> imu;
 };
 
 struct StatesGroup {
