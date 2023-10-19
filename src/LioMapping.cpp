@@ -154,7 +154,7 @@ int main(int argc, char** argv) {
     }
     /// 获取全局点云
     CloudWithTime cloud_map;
-    if (lio_mapping.getCloudMap(cloud_map)) {
+    if (false && lio_mapping.getCloudMap(cloud_map)) {
       pubCloudMap(cloud_map);
       cloud.cloud_w.reset(new PointCloudXYZI);
     }

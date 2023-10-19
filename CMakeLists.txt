@@ -91,10 +91,6 @@ add_library(${PROJECT_NAME}_ikd_tree src/ikd-Tree/ikd_Tree.cpp)
 add_library(${PROJECT_NAME}_preprocess src/preprocess.cpp)
 add_library(${PROJECT_NAME}_lio src/LidarMapping.cpp)
 
-add_library(${PROJECT_NAME}_ikd_tree src/ikd-Tree/ikd_Tree.cpp)
-add_library(${PROJECT_NAME}_preprocess src/preprocess.cpp)
-add_library(${PROJECT_NAME}_lio src/LidarMapping.cpp)
-
 add_executable(lio_mapping src/LioMapping.cpp)
 target_link_libraries(lio_mapping
         ${catkin_LIBRARIES}
@@ -102,4 +98,5 @@ target_link_libraries(lio_mapping
         ${PROJECT_NAME}_lio
         ${PROJECT_NAME}_ikd_tree
         ${PROJECT_NAME}_preprocess
+        ${PROJECT_NAME}_timer
         )

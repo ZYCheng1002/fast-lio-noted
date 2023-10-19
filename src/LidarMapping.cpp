@@ -189,7 +189,8 @@ void LioMapping::run() {
                << state_point.offset_T_L_I.transpose() << " " << state_point.vel.transpose() << " "
                << state_point.bg.transpose() << " " << state_point.ba.transpose() << " " << state_point.grav << endl;
 
-      {
+      /// fixme: 打开后ikdtree有问题(变慢, 未知segment default)
+      if (false) {
         PointVector().swap(ikdtree->PCL_Storage);
         Timer::Evaluate([&]() { ikdtree->flatten(ikdtree->Root_Node, ikdtree->PCL_Storage, NOT_RECORD); },
                         "ikdtree flatten");
