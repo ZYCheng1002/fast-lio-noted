@@ -21,10 +21,10 @@ class Timer {
   };
 
   /**
-     * 评价并记录函数用时
-     * @tparam F
-     * @param func
-     * @param func_name
+   * 评价并记录函数用时
+   * @tparam F
+   * @param func
+   * @param func_name
    */
   template <class F>
   static void Evaluate(F&& func, const std::string& func_name) {
@@ -33,6 +33,18 @@ class Timer {
     auto t2 = std::chrono::steady_clock::now();
     auto time_used = std::chrono::duration_cast<std::chrono::duration<double>>(t2 - t1).count() * 1000;
 
+    if (records_.find(func_name) != records_.end()) {
+      records_[func_name].time_usage_in_ms_.emplace_back(time_used);
+    } else {
+      records_.insert({func_name, TimerRecord(func_name, time_used)});
+    }
+  }
+
+  /**
+   * 仅记录时间
+   */
+  static void Evaluate(const std::string& func_name, const double& time_us) {
+    auto time_used = time_us * 1000;
     if (records_.find(func_name) != records_.end()) {
       records_[func_name].time_usage_in_ms_.emplace_back(time_used);
     } else {
@@ -55,6 +67,5 @@ class Timer {
  private:
   static std::map<std::string, TimerRecord> records_;
 };
-
 
 #endif  // FAST_LIO_TIMER_H

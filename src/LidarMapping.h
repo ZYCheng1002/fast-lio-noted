@@ -122,7 +122,7 @@ class LioMapping {
   double last_timestamp_lidar = 0, last_timestamp_imu = -1.0;
   double HALF_FOV_COS = 0, FOV_DEG = 0, lidar_end_time = 0, first_lidar_time = 0.0;
   int effct_feat_num = 0, time_log_counter = 0, scan_count = 0, publish_count = 0;
-  int feats_down_size = 0;
+  std::size_t feats_down_size = 0;
   std::vector<bool> point_selected_surf;
   bool lidar_pushed{}, flg_first_scan = true, flg_EKF_inited{};
   vector<vector<int>> pointSearchInd_surf;
@@ -160,8 +160,6 @@ class LioMapping {
   BoxPointType LocalMap_Points{};
   bool Localmap_Initialized = false;
 
-  PointCloudXYZI::Ptr pcl_wait_pub;
-  PointCloudXYZI::Ptr pcl_wait_save;  /// 全局点云(世界坐标系下的imu坐标系)
   double timediff_lidar_wrt_imu = 0.0;
   bool timediff_set_flg = false;
 

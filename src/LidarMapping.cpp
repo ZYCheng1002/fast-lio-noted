@@ -149,7 +149,7 @@ void LioMapping::run() {
         continue;
       }
       /// 通过时间判断是否完成初始化
-      flg_EKF_inited = (Measures.lidar_beg_time - first_lidar_time) < INIT_TIME_LIO ? false : true;
+      flg_EKF_inited = (Measures.lidar_beg_time - first_lidar_time) >= INIT_TIME_LIO;
       /// 根据lidar pose获取周围box信息
       Timer::Evaluate([&]() { lasermapFovSegment(); }, "laser map Fov Segment");
       downSizeFilterSurf.setInputCloud(feats_undistort);
@@ -159,7 +159,7 @@ void LioMapping::run() {
       /// 初始化ikdtree
       if (ikdtree->Root_Node == nullptr) {
         if (feats_down_size > 5) {
-          ikdtree->set_downsample_param(lio_param.filter_size_map_min);
+          ikdtree->set_downsample_param(static_cast<float>(lio_param.filter_size_map_min));
           feats_down_world->resize(feats_down_size);
           for (int i = 0; i < feats_down_size; i++) {
             pointBodyToWorld(&(feats_down_body->points[i]), &(feats_down_world->points[i]));
@@ -273,20 +273,6 @@ void LioMapping::run() {
       auto time_used = std::chrono::duration_cast<std::chrono::duration<double>>(t2_end - t1_start).count() * 1000;
     }
   }
-  /**************** save map ****************/
-  /* 1. make sure you have enough memories
-  /* 2. pcd save will largely influence the real-time performences **/
-  if (pcl_wait_save->size() > 0 && lio_param.pcd_save_en) {
-    string file_name = string("scans.pcd");
-    string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
-    pcl::PCDWriter pcd_writer;
-    LOG(INFO) << "current scan saved to /PCD/" << file_name;
-    pcl::VoxelGrid<PointType> down;
-    down.setLeafSize(0.3f, 0.3f, 0.3f);
-    down.setInputCloud(pcl_wait_save);
-    down.filter(*pcl_wait_save);
-    pcd_writer.writeBinary(all_points_dir, *pcl_wait_save);
-  }
 
   fout_out.close();
   fout_pre.close();
@@ -331,8 +317,6 @@ void LioMapping::memoryInit() {
   normvec.reset(new PointCloudXYZI(100000, 1));
   laserCloudOri.reset(new PointCloudXYZI(100000, 1));
   corr_normvect.reset(new PointCloudXYZI(100000, 1));
-  pcl_wait_pub.reset(new PointCloudXYZI(500000, 1));
-  pcl_wait_save.reset(new PointCloudXYZI());  /// 全局点云(世界坐标系下的imu坐标系)
 
   p_pre.reset(new Preprocess());
   p_imu.reset(new ImuProcess());
@@ -340,7 +324,6 @@ void LioMapping::memoryInit() {
 }
 
 void LioMapping::rosParamInit() {
-  /// todo 直接使用param而不进行转换
   p_pre->blind = lio_param.blind;
   p_pre->lidar_type = lio_param.lidar_type;
   p_pre->N_SCANS = lio_param.N_SCANS;
@@ -539,7 +522,7 @@ void LioMapping::imuCbk(const sensor_msgs::Imu::ConstPtr& msg_in) {
 
   last_timestamp_imu = timestamp;
 
-  imu_buffer.push_back(msg);
+  imu_buffer.emplace_back(msg);
   mtx_buffer.unlock();
   sig_buffer.notify_all();
 }
