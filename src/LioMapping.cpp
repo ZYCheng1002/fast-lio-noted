@@ -71,6 +71,12 @@ void pubCloudMap(CloudWithTime cloud) {
   pubLaserCloudMap.publish(laserCloudMap);
 }
 
+struct Param{
+  bool path_enable = false;
+  bool scan_pub_enable = true;
+  bool scan_body_pub_enable = true;
+};
+
 int main(int argc, char** argv) {
   google::InitGoogleLogging(argv[0]);
   google::ParseCommandLineFlags(&argc, &argv, true);
@@ -80,11 +86,12 @@ int main(int argc, char** argv) {
   ros::init(argc, argv, "laserMapping");
   ros::NodeHandle nh;
   LioParam lio_param;
+  Param mapping_param;
   std::string lid_topic, imu_topic;
-  nh.param<bool>("publish/path_en", lio_param.path_en, true);
-  nh.param<bool>("publish/scan_publish_en", lio_param.scan_pub_en, true);
+  nh.param<bool>("publish/path_en", mapping_param.path_enable, true);
+  nh.param<bool>("publish/scan_publish_en", mapping_param.scan_pub_enable, true);
   nh.param<bool>("publish/dense_publish_en", lio_param.dense_pub_en, true);
-  nh.param<bool>("publish/scan_bodyframe_pub_en", lio_param.scan_body_pub_en, true);
+  nh.param<bool>("publish/scan_bodyframe_pub_en", mapping_param.scan_body_pub_enable, true);
   nh.param<int>("max_iteration", lio_param.NUM_MAX_ITERATIONS, 4);
   nh.param<string>("map_file_path", lio_param.map_file_path, "");
   nh.param<string>("common/lid_topic", lid_topic, "/livox/lidar");
@@ -147,7 +154,7 @@ int main(int argc, char** argv) {
     }
     /// 获取实时点云
     CloudWithTime cloud;
-    if (lio_mapping.getPointCloud(cloud)) {
+    if (mapping_param.scan_pub_enable && lio_mapping.getPointCloud(cloud)) {
       pubPointCloud(cloud);
       cloud.cloud_b.reset(new PointCloudXYZI);
       cloud.cloud_w.reset(new PointCloudXYZI);

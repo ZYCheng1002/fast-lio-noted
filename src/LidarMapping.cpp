@@ -36,20 +36,19 @@ bool LioMapping::getPointCloud(CloudWithTime& cloud) {
   }
   cloud_update.store(false);
   cloud.timestamp = lidar_end_time;
-  if (scan_pub_en) {
-    PointCloudXYZI::Ptr laserCloudFullRes(dense_pub_en ? feats_undistort : feats_down_body);
-    std::size_t size = laserCloudFullRes->points.size();
-    PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
 
-    for (int i = 0; i < size; i++) {
-      rgbPointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudWorld->points[i]);
-    }
-    *cloud.cloud_w = *laserCloudWorld;
-  }
+  PointCloudXYZI::Ptr laserCloudFullRes(lio_param.dense_pub_en ? feats_undistort : feats_down_body);
+  std::size_t size = laserCloudFullRes->points.size();
+  PointCloudXYZI::Ptr laserCloudWorld(new PointCloudXYZI(size, 1));
 
-  std::size_t size = feats_undistort->points.size();
-  PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size, 1));
   for (int i = 0; i < size; i++) {
+    rgbPointBodyToWorld(&laserCloudFullRes->points[i], &laserCloudWorld->points[i]);
+  }
+  *cloud.cloud_w = *laserCloudWorld;
+
+  std::size_t size_b = feats_undistort->points.size();
+  PointCloudXYZI::Ptr laserCloudIMUBody(new PointCloudXYZI(size_b, 1));
+  for (int i = 0; i < size_b; i++) {
     rgbPointBodyLidarToIMU(&feats_undistort->points[i], &laserCloudIMUBody->points[i]);
   }
   sensor_msgs::PointCloud2 laserCloudmsg;
@@ -77,24 +76,25 @@ void LioMapping::run() {
   double deltaT, deltaR, aver_time_consu = 0, aver_time_icp = 0, aver_time_match = 0, aver_time_incre = 0,
                          aver_time_solve = 0, aver_time_const_H_time = 0;
   bool flg_EKF_converged, EKF_stop_flg = false;
-  double run_time = 0;
-  FOV_DEG = (fov_deg + 10.0) > 179.9 ? 179.9 : (fov_deg + 10.0);
+  FOV_DEG = (lio_param.fov_deg + 10.0) > 179.9 ? 179.9 : (lio_param.fov_deg + 10.0);
   HALF_FOV_COS = cos((FOV_DEG)*0.5 * PI_M / 180.0);
   _featsArray.reset(new PointCloudXYZI());
   point_selected_surf.resize(100000, true);
   res_last.resize(100000, -1000.0f);
-  downSizeFilterSurf.setLeafSize(filter_size_surf_min, filter_size_surf_min, filter_size_surf_min);
-  downSizeFilterMap.setLeafSize(filter_size_map_min, filter_size_map_min, filter_size_map_min);
+  downSizeFilterSurf.setLeafSize(
+      lio_param.filter_size_surf_min, lio_param.filter_size_surf_min, lio_param.filter_size_surf_min);
+  downSizeFilterMap.setLeafSize(
+      lio_param.filter_size_map_min, lio_param.filter_size_map_min, lio_param.filter_size_map_min);
   point_selected_surf.resize(100000, true);
   res_last.resize(100000, -1000.0f);
 
-  Lidar_T_wrt_IMU << VEC_FROM_ARRAY(extrinT);
-  Lidar_R_wrt_IMU << MAT_FROM_ARRAY(extrinR);
+  Lidar_T_wrt_IMU << VEC_FROM_ARRAY(lio_param.extrinT);
+  Lidar_R_wrt_IMU << MAT_FROM_ARRAY(lio_param.extrinR);
   p_imu->set_extrinsic(Lidar_T_wrt_IMU, Lidar_R_wrt_IMU);
-  p_imu->set_gyr_cov(V3D(gyr_cov, gyr_cov, gyr_cov));
-  p_imu->set_acc_cov(V3D(acc_cov, acc_cov, acc_cov));
-  p_imu->set_gyr_bias_cov(V3D(b_gyr_cov, b_gyr_cov, b_gyr_cov));
-  p_imu->set_acc_bias_cov(V3D(b_acc_cov, b_acc_cov, b_acc_cov));
+  p_imu->set_gyr_cov(V3D(lio_param.gyr_cov, lio_param.gyr_cov, lio_param.gyr_cov));
+  p_imu->set_acc_cov(V3D(lio_param.acc_cov, lio_param.acc_cov, lio_param.acc_cov));
+  p_imu->set_gyr_bias_cov(V3D(lio_param.b_gyr_cov, lio_param.b_gyr_cov, lio_param.b_gyr_cov));
+  p_imu->set_acc_bias_cov(V3D(lio_param.b_acc_cov, lio_param.b_acc_cov, lio_param.b_acc_cov));
 
   double epsi[23] = {0.001};
   fill(epsi, epsi + 23, 0.001);
@@ -103,7 +103,7 @@ void LioMapping::run() {
       df_dx,
       df_dw,
       [this](state_ikfom& s, esekfom::dyn_share_datastruct<double>& ekfom_data) { hShareModel(s, ekfom_data); },
-      NUM_MAX_ITERATIONS,
+      lio_param.NUM_MAX_ITERATIONS,
       epsi);
 
   /*** debug record ***/
@@ -111,10 +111,9 @@ void LioMapping::run() {
   string pos_log_dir = root_dir + "/Log/pos_log.txt";
   fp = fopen(pos_log_dir.c_str(), "w");
 
-  ofstream fout_pre, fout_out, fout_dbg;
+  ofstream fout_pre, fout_out;
   fout_pre.open(DEBUG_FILE_DIR("mat_pre.txt"), ios::out);
   fout_out.open(DEBUG_FILE_DIR("mat_out.txt"), ios::out);
-  fout_dbg.open(DEBUG_FILE_DIR("dbg.txt"), ios::out);
   if (fout_pre && fout_out)
     LOG(INFO) << "~~~~" << ROOT_DIR << " file opened";
   else
@@ -134,13 +133,11 @@ void LioMapping::run() {
         continue;
       }
 
-      double t0, t1, t2, t3, t4, t5, match_start, solve_start, svd_time;
+      double t0, t1, t2, t3, t4, t5, match_start, solve_start;
 
       match_time = 0;
       kdtree_search_time = 0.0;
       solve_time = 0;
-      solve_const_H_time = 0;
-      svd_time = 0;
       t0 = omp_get_wtime();
       /// imu 前向传播(predict),点云运动补偿
       Timer::Evaluate([&]() { p_imu->Process(Measures, kf, feats_undistort); }, "imu process");
@@ -162,7 +159,7 @@ void LioMapping::run() {
       /// 初始化ikdtree
       if (ikdtree->Root_Node == nullptr) {
         if (feats_down_size > 5) {
-          ikdtree->set_downsample_param(filter_size_map_min);
+          ikdtree->set_downsample_param(lio_param.filter_size_map_min);
           feats_down_world->resize(feats_down_size);
           for (int i = 0; i < feats_down_size; i++) {
             pointBodyToWorld(&(feats_down_body->points[i]), &(feats_down_world->points[i]));
@@ -232,7 +229,7 @@ void LioMapping::run() {
       cloud_update.store(true);
 
       /*** Debug variables ***/
-      if (runtime_pos_log) {
+      if (lio_param.runtime_pos_log) {
         frame_num++;
         kdtree_size_end = ikdtree->size();
         aver_time_consu = aver_time_consu * (frame_num - 1) / frame_num + (t5 - t0) / frame_num;
@@ -274,15 +271,12 @@ void LioMapping::run() {
       }
       auto t2_end = std::chrono::steady_clock::now();
       auto time_used = std::chrono::duration_cast<std::chrono::duration<double>>(t2_end - t1_start).count() * 1000;
-      run_time += time_used;
     }
   }
-  LOG(ERROR) << "run time: " << run_time / frame_num;
-
   /**************** save map ****************/
   /* 1. make sure you have enough memories
   /* 2. pcd save will largely influence the real-time performences **/
-  if (pcl_wait_save->size() > 0 && pcd_save_en) {
+  if (pcl_wait_save->size() > 0 && lio_param.pcd_save_en) {
     string file_name = string("scans.pcd");
     string all_points_dir(string(string(ROOT_DIR) + "PCD/") + file_name);
     pcl::PCDWriter pcd_writer;
@@ -297,7 +291,7 @@ void LioMapping::run() {
   fout_out.close();
   fout_pre.close();
 
-  if (runtime_pos_log) {
+  if (lio_param.runtime_pos_log) {
     vector<double> t, s_vec, s_vec2, s_vec3, s_vec4, s_vec5, s_vec6, s_vec7;
     FILE* fp2;
     string log_dir = root_dir + "/Log/fast_lio_time_log.csv";
@@ -347,24 +341,6 @@ void LioMapping::memoryInit() {
 
 void LioMapping::rosParamInit() {
   /// todo 直接使用param而不进行转换
-  path_en = lio_param.path_en;
-  scan_pub_en = lio_param.scan_pub_en;
-  dense_pub_en = lio_param.dense_pub_en;
-  scan_body_pub_en = lio_param.scan_body_pub_en;
-  NUM_MAX_ITERATIONS = lio_param.NUM_MAX_ITERATIONS;
-  map_file_path = lio_param.map_file_path;
-  time_sync_en = lio_param.time_sync_en;
-  time_diff_lidar_to_imu = lio_param.time_diff_lidar_to_imu;
-  filter_size_corner_min = lio_param.filter_size_corner_min;
-  filter_size_surf_min = lio_param.filter_size_surf_min;
-  filter_size_map_min = lio_param.filter_size_map_min;
-  cube_len = lio_param.cube_len;
-  DET_RANGE = lio_param.DET_RANGE;
-  fov_deg = lio_param.fov_deg;
-  gyr_cov = lio_param.gyr_cov;
-  acc_cov = lio_param.acc_cov;
-  b_gyr_cov = lio_param.b_gyr_cov;
-  b_acc_cov = lio_param.b_acc_cov;
   p_pre->blind = lio_param.blind;
   p_pre->lidar_type = lio_param.lidar_type;
   p_pre->N_SCANS = lio_param.N_SCANS;
@@ -372,12 +348,6 @@ void LioMapping::rosParamInit() {
   p_pre->SCAN_RATE = lio_param.SCAN_RATE;
   p_pre->point_filter_num = lio_param.point_filter_num;
   p_pre->feature_enabled = lio_param.feature_enabled;
-  runtime_pos_log = lio_param.runtime_pos_log;
-  extrinsic_est_en = lio_param.extrinsic_est_en;
-  pcd_save_en = lio_param.pcd_save_en;
-  pcd_save_interval = lio_param.pcd_save_interval;
-  extrinT = lio_param.extrinT;
-  extrinR = lio_param.extrinR;
 }
 
 inline void LioMapping::dumpLioStateToLog(FILE* fp) {
@@ -450,8 +420,8 @@ void LioMapping::lasermapFovSegment() {
   /// 初始化Box
   if (!Localmap_Initialized) {
     for (int i = 0; i < 3; i++) {
-      LocalMap_Points.vertex_min[i] = pos_LiD(i) - cube_len / 2.0;
-      LocalMap_Points.vertex_max[i] = pos_LiD(i) + cube_len / 2.0;
+      LocalMap_Points.vertex_min[i] = pos_LiD(i) - lio_param.cube_len / 2.0;
+      LocalMap_Points.vertex_max[i] = pos_LiD(i) + lio_param.cube_len / 2.0;
     }
     Localmap_Initialized = true;
     return;
@@ -463,23 +433,24 @@ void LioMapping::lasermapFovSegment() {
     dist_to_map_edge[i][0] = fabs(pos_LiD(i) - LocalMap_Points.vertex_min[i]);
     dist_to_map_edge[i][1] = fabs(pos_LiD(i) - LocalMap_Points.vertex_max[i]);
     /// lidar到box距离太近,意味着要移动box
-    if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * DET_RANGE || dist_to_map_edge[i][1] <= MOV_THRESHOLD * DET_RANGE)
+    if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * lio_param.DET_RANGE ||
+        dist_to_map_edge[i][1] <= MOV_THRESHOLD * lio_param.DET_RANGE)
       need_move = true;
   }
   if (!need_move) return;
   BoxPointType New_LocalMap_Points, tmp_boxpoints;
   New_LocalMap_Points = LocalMap_Points;
   /// 计算box边界
-  float mov_dist =
-      max((cube_len - 2.0 * MOV_THRESHOLD * DET_RANGE) * 0.5 * 0.9, double(DET_RANGE * (MOV_THRESHOLD - 1)));
+  float mov_dist = max((lio_param.cube_len - 2.0 * MOV_THRESHOLD * lio_param.DET_RANGE) * 0.5 * 0.9,
+                       double(lio_param.DET_RANGE * (MOV_THRESHOLD - 1)));
   for (int i = 0; i < 3; i++) {
     tmp_boxpoints = LocalMap_Points;
-    if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * DET_RANGE) {
+    if (dist_to_map_edge[i][0] <= MOV_THRESHOLD * lio_param.DET_RANGE) {
       New_LocalMap_Points.vertex_max[i] -= mov_dist;
       New_LocalMap_Points.vertex_min[i] -= mov_dist;
       tmp_boxpoints.vertex_min[i] = LocalMap_Points.vertex_max[i] - mov_dist;
       cub_needrm.push_back(tmp_boxpoints);
-    } else if (dist_to_map_edge[i][1] <= MOV_THRESHOLD * DET_RANGE) {
+    } else if (dist_to_map_edge[i][1] <= MOV_THRESHOLD * lio_param.DET_RANGE) {
       New_LocalMap_Points.vertex_max[i] += mov_dist;
       New_LocalMap_Points.vertex_min[i] += mov_dist;
       tmp_boxpoints.vertex_max[i] = LocalMap_Points.vertex_min[i] + mov_dist;
@@ -524,13 +495,14 @@ void LioMapping::livoxPclCbk(const fast_lio::CustomMsg::ConstPtr& msg) {
   }
   last_timestamp_lidar = msg->header.stamp.toSec();
 
-  if (!time_sync_en && abs(last_timestamp_imu - last_timestamp_lidar) > 10.0 && !imu_buffer.empty() &&
+  if (!lio_param.time_sync_en && abs(last_timestamp_imu - last_timestamp_lidar) > 10.0 && !imu_buffer.empty() &&
       !lidar_buffer.empty()) {
     printf(
         "IMU and LiDAR not Synced, IMU time: %lf, lidar header time: %lf \n", last_timestamp_imu, last_timestamp_lidar);
   }
 
-  if (time_sync_en && !timediff_set_flg && abs(last_timestamp_lidar - last_timestamp_imu) > 1 && !imu_buffer.empty()) {
+  if (lio_param.time_sync_en && !timediff_set_flg && abs(last_timestamp_lidar - last_timestamp_imu) > 1 &&
+      !imu_buffer.empty()) {
     timediff_set_flg = true;
     timediff_lidar_wrt_imu = last_timestamp_lidar + 0.1 - last_timestamp_imu;
     printf("Self sync IMU and LiDAR, time diff is %.10lf \n", timediff_lidar_wrt_imu);
@@ -551,8 +523,8 @@ void LioMapping::imuCbk(const sensor_msgs::Imu::ConstPtr& msg_in) {
   // cout<<"IMU got at: "<<msg_in->header.stamp.toSec()<<endl;
   sensor_msgs::Imu::Ptr msg(new sensor_msgs::Imu(*msg_in));
 
-  msg->header.stamp = ros::Time().fromSec(msg_in->header.stamp.toSec() - time_diff_lidar_to_imu);
-  if (abs(timediff_lidar_wrt_imu) > 0.1 && time_sync_en) {
+  msg->header.stamp = ros::Time().fromSec(msg_in->header.stamp.toSec() - lio_param.time_diff_lidar_to_imu);
+  if (abs(timediff_lidar_wrt_imu) > 0.1 && lio_param.time_sync_en) {
     msg->header.stamp = ros::Time().fromSec(timediff_lidar_wrt_imu + msg_in->header.stamp.toSec());
   }
 
@@ -633,15 +605,18 @@ void LioMapping::mapIncremental() {
       BoxPointType Box_of_Point;
       PointType downsample_result, mid_point;
       mid_point.x =
-          floor(feats_down_world->points[i].x / filter_size_map_min) * filter_size_map_min + 0.5 * filter_size_map_min;
+          floor(feats_down_world->points[i].x / lio_param.filter_size_map_min) * lio_param.filter_size_map_min +
+          0.5 * lio_param.filter_size_map_min;
       mid_point.y =
-          floor(feats_down_world->points[i].y / filter_size_map_min) * filter_size_map_min + 0.5 * filter_size_map_min;
+          floor(feats_down_world->points[i].y / lio_param.filter_size_map_min) * lio_param.filter_size_map_min +
+          0.5 * lio_param.filter_size_map_min;
       mid_point.z =
-          floor(feats_down_world->points[i].z / filter_size_map_min) * filter_size_map_min + 0.5 * filter_size_map_min;
+          floor(feats_down_world->points[i].z / lio_param.filter_size_map_min) * lio_param.filter_size_map_min +
+          0.5 * lio_param.filter_size_map_min;
       float dist = calc_dist(feats_down_world->points[i], mid_point);
-      if (fabs(points_near[0].x - mid_point.x) > 0.5 * filter_size_map_min &&
-          fabs(points_near[0].y - mid_point.y) > 0.5 * filter_size_map_min &&
-          fabs(points_near[0].z - mid_point.z) > 0.5 * filter_size_map_min) {
+      if (fabs(points_near[0].x - mid_point.x) > 0.5 * lio_param.filter_size_map_min &&
+          fabs(points_near[0].y - mid_point.y) > 0.5 * lio_param.filter_size_map_min &&
+          fabs(points_near[0].z - mid_point.z) > 0.5 * lio_param.filter_size_map_min) {
         PointNoNeedDownsample.push_back(feats_down_world->points[i]);
         continue;
       }
@@ -774,7 +749,7 @@ void LioMapping::hShareModel(state_ikfom& s, esekfom::dyn_share_datastruct<doubl
     V3D C(s.rot.conjugate() * norm_vec);  /// R^T * u, u为平面参数
     V3D A(point_crossmat * C);            /// p^ * R^T * u
     /// 观测方程中的H,即雅克比
-    if (extrinsic_est_en) {                                       /// 外参估计
+    if (lio_param.extrinsic_est_en) {                             /// 外参估计
       V3D B(point_be_crossmat * s.offset_R_L_I.conjugate() * C);  // s.rot.conjugate()*norm_vec);
       ekfom_data.h_x.block<1, 12>(i, 0) << norm_p.x, norm_p.y, norm_p.z, VEC_FROM_ARRAY(A), VEC_FROM_ARRAY(B),
           VEC_FROM_ARRAY(C);
